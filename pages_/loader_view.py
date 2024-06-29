@@ -1,13 +1,17 @@
 import streamlit as st
-from pages.loader_controller import retrieve_data_from_file, load_schools, load_users, merge_and_clean, load_merged_data_to_assessments
+from pages_.loader_controller import retrieve_data_from_file, load_schools, load_users, merge_and_clean, load_merged_data_to_assessments
 
 
 class LoaderComponent:
 
     def __init__(self):
-        st.header("Data Loader")
+        st.title("Data Loader Pipeline 📦")
         st.markdown("""
-            Please use the provided template to ensure that there are no hiccups in the loading process. 
+            🚀 Please utilize the provided template to ensure a seamless loading process.
+
+            ⚠️ This page serves as the initiation point of the data pipeline. During the transformation stage, please be aware that some processing time is required. It is crucial that you DO NOT navigate away from this page while processing is underway.
+
+            🔒 Rest assured, security measures have been implemented to allow the data loading process to be redone without the concern of duplicate data.
         """)
 
         with open('DataLoadingTemplate.xlsx', 'rb') as file:

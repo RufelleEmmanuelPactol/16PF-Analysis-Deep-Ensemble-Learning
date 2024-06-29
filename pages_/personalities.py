@@ -3,11 +3,11 @@ def PersonalitiesComponent():
     import streamlit as st
     import pandas as pd
 
-    st.title("Extract-Transform-Load (ETL) Tool for 16PF")
+    st.title("Extract-Transform-Load (ETL) Tool for 16PF ⚙️")
     st.markdown("Read more about this project, or learn about 16 Personalities.")
 
     st.info("Use the sidebar to select sections.")
-    # Define the data
+    # Define the data⚙️
     primary_factors_data = [
         {"Factor": "A (Warmth)",
          "Low Factor": "The individual has the tendency to be socially reserved, impersonal, or distant towards other people",

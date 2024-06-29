@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import streamlit as st
 from settings.connectivity import get_engine
@@ -75,33 +76,19 @@ def get_stat():
             tagID = {TAG_ID}
         GROUP BY
             course
-    ),
-    total_stats AS (
-        SELECT
-            COUNT(*) AS total,
-            AVG(CASE WHEN grade >= 3 THEN c_cert END) AS avg_ccert
-        FROM
-            students
-        INNER JOIN
-            assessments a
-        ON
-            students.Id = a.student_id
-        WHERE
-            tagID = {TAG_ID}
     )
     SELECT
-        ts.total,
-        ROUND(ts.avg_ccert, 2) AS avg_ccert,
-        ROUND((pass.cnt / ts.total) * 100, 2) AS pass_rate,
-        ROUND(pass.avg_pass_grade, 2) AS avg_pass_grade,
-        ROUND(cs_bscs.avg_ccert, 2) AS avg_ccert_bscs,
-        ROUND(cs_bsits.avg_ccert, 2) AS avg_ccert_bsit,
-        ROUND(cs_bscs.avg_grade, 2) AS avg_grade_bscs,
-        ROUND(cs_bsits.avg_grade, 2) AS avg_grade_bsit,
-        ROUND((cs_bscs.pass_count / cs_bscs.total) * 100, 2) AS pass_rate_bscs,
-        ROUND((cs_bsits.pass_count / cs_bsits.total) * 100, 2) AS pass_rate_bsit
+        pass.cnt,
+        pass.avg_pass_grade,
+        cs_bscs.total,
+        cs_bscs.avg_ccert,
+        cs_bscs.avg_grade,
+        cs_bscs.pass_count,
+        cs_bsits.total,
+        cs_bsits.avg_ccert,
+        cs_bsits.avg_grade,
+        cs_bsits.pass_count
     FROM
-        total_stats ts,
         pass,
         (SELECT * FROM course_stats WHERE course = 'BSCS') AS cs_bscs,
         (SELECT * FROM course_stats WHERE course = 'BSIT') AS cs_bsits;
@@ -113,28 +100,50 @@ def get_stat():
     cursor.execute(STAT_QUERY)
     result = cursor.fetchone()
 
-    columns = [
-        "Total Students",
-        "Average CCert",
-        "Pass Rate (%)",
-        "Average Passing Grade",
-        "Average CCert (BSCS)",
-        "Average CCert (BSIT)",
-        "Average Grade (BSCS)",
-        "Average Grade (BSIT)",
-        "Pass Rate (BSCS) (%)",
-        "Pass Rate (BSIT) (%)"
-    ]
+    # Split the results for BSCS and BSIT
+    total_pass = result[0]
+    avg_pass_grade = result[1]
+    total_bscs = result[2]
+    avg_ccert_bscs = result[3]
+    avg_grade_bscs = result[4]
+    pass_count_bscs = result[5]
+    total_bsit = result[6]
+    avg_ccert_bsit = result[7]
+    avg_grade_bsit = result[8]
+    pass_count_bsit = result[9]
 
-    # Create a DataFrame from the fetched result
-    df = pd.DataFrame(result, index=columns, columns=["Value"])
+    # Create DataFrames for BSCS and BSIT
+    bscs_data = {
+        "Metric": ["Total Students", "Average CCert", "Pass Rate (%)", "Average Passing Grade", "Average Passing Grade (BSCS)", "Pass Rate (BSCS) (%)"],
+        "Value": [total_bscs, avg_ccert_bscs, (pass_count_bscs / total_bscs) * 100, avg_pass_grade, avg_grade_bscs, (pass_count_bscs / total_bscs) * 100]
+    }
 
-    # Reset the index to remove it and make the labels a column
+    bsit_data = {
+        "Metric": ["Total Students", "Average CCert", "Pass Rate (%)", "Average Passing Grade", "Average Passing Grade (BSIT)", "Pass Rate (BSIT) (%)"],
+        "Value": [total_bsit, avg_ccert_bsit, (pass_count_bsit / total_bsit) * 100, avg_pass_grade, avg_grade_bsit, (pass_count_bsit / total_bsit) * 100]
+    }
 
-    # Rename the columns for clarity
-    df.columns = ["Value"]
+    bscs_df = pd.DataFrame(bscs_data)
+    bsit_df = pd.DataFrame(bsit_data)
 
-    return df.to_markdown()
+    return bscs_df, bsit_df
+
+# Streamlit display function
+def display_stats():
+    st.subheader("General Statistics")
+
+    bscs_df, bsit_df = get_stat()
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("#### BSCS Statistics")
+        st.markdown(bscs_df.to_markdown(index=False))
+
+    with col2:
+        st.markdown("#### BSIT Statistics")
+        st.markdown(bsit_df.to_markdown(index=False))
+
 
 
 class YearOnYearComponent:
@@ -147,36 +156,62 @@ class YearOnYearComponent:
         st.markdown("View statistics, visualizations, and other statistics on a year-tag basis.")
         with st.spinner("Retrieving school tags..."):
             tags = get_tags()
+            tags.insert(0, "")
             value = st.selectbox(label="Select SCHOOL-TAG (School Year) to introspect", options=tags)
+            if not value:
+                return
             global TAG_ID
             TAG_ID = value.id
-        clicked = st.button("View statistics")
-        st.divider()
-        if clicked:
+
+
+
+        sections = ["", "General Statistics", "School Summary", "Rankings", "Raw Correlation Analysis Section", "Derived Correlation Analysis Section"]
+        selected_section = st.selectbox("Select Section to View", sections)
+
+        if selected_section == "General Statistics":
+            with st.spinner("Loading general statistics..."):
+                display_stats()
+
+        elif selected_section == "School Summary":
             col1, col2 = st.columns(2)
+
             with col1:
-                col1.markdown("#### General Statistics")
-                with st.spinner("Loading general statistics..."):
-                    col1.markdown(get_stat())
+                col1.markdown("#### School Summary")
+                with st.spinner("Loading best school performance..."):
+                    best_school()
             with col2:
                 col2.markdown("#### School Summary")
-                with st.spinner("School Performance 1"):
-                    best_school()
-                st.divider()
-                with st.spinner("School Performance 2"):
+                with st.spinner("Loading worst school performance..."):
                     worst_school()
 
-            st.divider()
-            st.markdown("#### Correlation Analysis")
-            with st.spinner("Loading correlation analysis..."):
-                show_corr()
-
-            with st.spinner("Loading best student statistics..."):
+        elif selected_section == "Rankings":
+            with st.spinner("Loading rankings..."):
                 st.markdown("#### Weighted Student Rankings (C-CERT + Prog2)")
                 best_students()
 
-            with st.spinner("Loading Correlation Analysis for Best and Worst 30 students..."):
-                correlation_best_worst_students()
+                st.divider()
+
+                st.markdown("#### TOP 10 Best Performing Schools")
+                best_schools()
+
+        elif selected_section == "Raw Correlation Analysis Section":
+            with st.spinner("Loading correlation analysis..."):
+                show_corr()
+                with st.expander("About Correlation"):
+                    st.markdown(
+                        "Pearson's r is a statistical measure that estimates the strength and direction of the linear relationship between two variables.\n\nHere, we analyze the correlation between 16PF variables and their performances, through their final grades and CCERT grades.",
+                        )
+
+                st.divider()
+
+                with st.spinner("Loading Correlation Analysis for Best and Worst 30 students..."):
+                    correlation_best_worst_students()
+
+
+        elif selected_section == "Derived Correlation Analysis Section":
+
+            with st.spinner("Showing top-and-worst analysis on 16PF..."):
+                show_common_16pf()
 
 
 def best_school():
@@ -185,9 +220,12 @@ def best_school():
         SELECT
             s.Name,
             COUNT(*) as student_count,
-            AVG(CASE WHEN a.grade >= 3 THEN a.grade END) as avg_passing_grade,
+            AVG(CASE WHEN a.grade >= 3 THEN a.grade END) / 5 as avg_passing_grade,
             SUM(CASE WHEN a.grade >= 3 THEN 1 ELSE 0 END) / COUNT(*) * 100 as passing_rate,
-            AVG(a.c_cert) as avg_ccert_grade
+            AVG(a.c_cert) / 80 as avg_ccert_grade,
+            (0.5 * (AVG(CASE WHEN a.grade >= 3 THEN a.grade END) / 5) + 
+             0.3 * (SUM(CASE WHEN a.grade >= 3 THEN 1 ELSE 0 END) / COUNT(*) * 100) / 100 + 
+             0.2 * (AVG(a.c_cert) / 80)) * 100 as weighted_score
         FROM
             students
         INNER JOIN
@@ -208,13 +246,14 @@ def best_school():
         'Best' as Performance,
         Name,
         student_count,
-        ROUND(avg_passing_grade, 2) as avg_passing_grade,
+        ROUND(avg_passing_grade * 100, 2) as avg_passing_grade,
         ROUND(passing_rate, 2) as passing_rate,
-        ROUND(avg_ccert_grade, 2) as avg_ccert_grade
+        ROUND(avg_ccert_grade * 100, 2) as avg_ccert_grade,
+        ROUND(weighted_score, 2) as weighted_score
     FROM
         school_stats
     ORDER BY
-        avg_passing_grade DESC
+        weighted_score DESC
     LIMIT 1;
     """
     conn = get_engine()
@@ -225,10 +264,12 @@ def best_school():
     conn.close()
 
     # Define the columns
-    columns = ["Performance", "Name", "Student Count", "Average Passing Grade", "Passing Rate", "Average CCERT Grade"]
+    columns = ["Performance", "Name", "Student Count", "Average Passing Grade", "Passing Rate (%)",
+               "Average CCERT Grade (%)", "Weighted Score (%)"]
 
     # Create a DataFrame from the fetched result
     df = pd.DataFrame([result], columns=columns)
+    df['Average Passing Grade'] = df["Average Passing Grade"].apply(lambda x: (x * 5) / 100)
 
     # Transpose the DataFrame for vertical display
     df = df.T.reset_index()
@@ -238,6 +279,9 @@ def best_school():
     markdown_table = df.to_markdown(index=False)
 
     # Display the table using Streamlit
+
+    # Normalize to 5 upon display
+
     st.markdown(markdown_table)
 
 
@@ -247,9 +291,12 @@ def worst_school():
         SELECT
             s.Name,
             COUNT(*) as student_count,
-            AVG(CASE WHEN a.grade >= 3 THEN a.grade END) as avg_passing_grade,
+            AVG(CASE WHEN a.grade >= 3 THEN a.grade END) / 5 as avg_passing_grade,
             SUM(CASE WHEN a.grade >= 3 THEN 1 ELSE 0 END) / COUNT(*) * 100 as passing_rate,
-            AVG(a.c_cert) as avg_ccert_grade
+            AVG(a.c_cert) / 80 as avg_ccert_grade,
+            (0.5 * (AVG(CASE WHEN a.grade >= 3 THEN a.grade END) / 5) + 
+             0.3 * (SUM(CASE WHEN a.grade >= 3 THEN 1 ELSE 0 END) / COUNT(*) * 100) / 100 + 
+             0.2 * (AVG(a.c_cert) / 80)) * 100 as weighted_score
         FROM
             students
         INNER JOIN
@@ -270,13 +317,14 @@ def worst_school():
         'Worst' as Performance,
         Name,
         student_count,
-        ROUND(avg_passing_grade, 2) as avg_passing_grade,
+        ROUND(avg_passing_grade * 100, 2) as avg_passing_grade,
         ROUND(passing_rate, 2) as passing_rate,
-        ROUND(avg_ccert_grade, 2) as avg_ccert_grade
+        ROUND(avg_ccert_grade * 100, 2) as avg_ccert_grade,
+        ROUND(weighted_score, 2) as weighted_score
     FROM
         school_stats
     ORDER BY
-        avg_passing_grade ASC
+        weighted_score ASC
     LIMIT 1;
     """
     conn = get_engine()
@@ -287,10 +335,12 @@ def worst_school():
     conn.close()
 
     # Define the columns
-    columns = ["Performance", "Name", "Student Count", "Average Passing Grade", "Passing Rate", "Average CCERT Grade"]
+    columns = ["Performance", "Name", "Student Count", "Average Passing Grade", "Passing Rate (%)",
+               "Average CCERT Grade (%)", "Weighted Score (%)"]
 
     # Create a DataFrame from the fetched result
     df = pd.DataFrame([result], columns=columns)
+    df['Average Passing Grade'] = df["Average Passing Grade"].apply(lambda x: (x * 5) / 100)
 
     # Transpose the DataFrame for vertical display
     df = df.T.reset_index()
@@ -386,7 +436,6 @@ def best_students():
     conn = get_engine()
     cursor = conn.cursor()
 
-
     cursor.execute(query)
     result = cursor.fetchall()
 
@@ -476,33 +525,204 @@ def correlation_best_worst_students():
         text_auto=True
     )
 
-    fig_c_cert_worst = px.bar(
-        x=corr_with_c_cert_worst.index,
-        y=corr_with_c_cert_worst.values,
-        title='Correlation with CCert (Worst Students)',
-        labels={'x': 'Features', 'y': 'Correlation'},
-        text_auto=True
-    )
-
-    fig_grade_worst = px.bar(
-        x=corr_with_grade_worst.index,
-        y=corr_with_grade_worst.values,
-        title='Correlation with Grade (Worst Students)',
-        labels={'x': 'Features', 'y': 'Correlation'},
-        text_auto=True
-    )
-
     # Display the bar graphs in Streamlit
     st.plotly_chart(fig_c_cert_best)
     st.plotly_chart(fig_grade_best)
-    st.plotly_chart(fig_c_cert_worst)
-    st.plotly_chart(fig_grade_worst)
-
-
 
     cursor.close()
     conn.close()
 
 
+def best_schools():
+    query = f"""
+    WITH school_stats AS (
+        SELECT
+            s.Name,
+            COUNT(*) as student_count,
+            AVG(CASE WHEN a.grade >= 3 THEN a.grade END) / 5 as avg_passing_grade,
+            SUM(CASE WHEN a.grade >= 3 THEN 1 ELSE 0 END) / COUNT(*) * 100 as passing_rate,
+            AVG(a.c_cert) / 80 as avg_ccert_grade,
+            (0.5 * (AVG(CASE WHEN a.grade >= 3 THEN a.grade END) / 5) + 
+             0.3 * (SUM(CASE WHEN a.grade >= 3 THEN 1 ELSE 0 END) / COUNT(*) * 100) / 100 + 
+             0.2 * (AVG(a.c_cert) / 80)) * 100 as weighted_score
+        FROM
+            students
+        INNER JOIN
+            Schools s
+        ON
+            students.previous_school_id = s.Id
+        INNER JOIN
+            assessments a
+        ON
+            students.Id = a.student_id
+        WHERE students.tagID = {TAG_ID}
+        GROUP BY
+            s.Id
+        HAVING
+            student_count > 3
+    )
+    SELECT
+        Name,
+        student_count,
+        ROUND(avg_passing_grade * 100, 2) as avg_passing_grade,
+        ROUND(passing_rate, 2) as passing_rate,
+        ROUND(avg_ccert_grade * 100, 2) as avg_ccert_grade,
+        ROUND(weighted_score, 2) as weighted_score
+    FROM
+        school_stats
+    ORDER BY
+        weighted_score DESC
+    LIMIT 10;
+    """
+    conn = get_engine()
+    cursor = conn.cursor()
+    cursor.execute(query)
+    result = cursor.fetchall()
+    cursor.close()
+    conn.close()
 
-    z
+    # Define the columns
+    columns = ["School", "Student Count", "Average Passing Grade", "Passing Rate (%)", "Average CCERT Grade (%)",
+               "Weighted Score (%)"]
+
+    # Create a DataFrame from the fetched result
+    df = pd.DataFrame(result, columns=columns)
+
+    df['Average Passing Grade'] = df["Average Passing Grade"].apply(lambda x: (x * 5) / 100)
+
+    # Convert the DataFrame to a Markdown table
+    markdown_table = df.to_markdown(index=False)
+
+    # Display the table using Streamlit
+    st.markdown(markdown_table)
+
+
+def get_top_worst_students():
+    query = """
+    WITH student_scores AS (
+        SELECT
+            s.student_id,
+            ROUND((0.5 * (a.grade / 5) + 0.5 * (a.c_cert / 80)), 2) as weighted_score,
+            CASE
+                WHEN a.cfit = 'L' THEN 2
+                WHEN a.cfit = 'BA' THEN 4
+                WHEN a.cfit = 'A' THEN 6
+                WHEN a.cfit = 'AA' THEN 8
+                WHEN a.cfit = 'H' THEN 10
+                ELSE 0
+            END AS cfit_rank,
+            a.attr_A, a.attr_B, a.attr_C, a.attr_E, a.attr_F, a.attr_G, a.attr_H,
+            a.attr_I, a.attr_L, a.attr_M, a.attr_N, a.attr_O, a.attr_Q1, a.attr_Q2,
+            a.attr_Q3, a.attr_Q4, a.attr_EX, a.attr_AX, a.attr_TM, a.attr_IN, a.attr_SC
+        FROM
+            students s
+        INNER JOIN
+            assessments a
+        ON
+            s.Id = a.student_id
+    )
+    SELECT * FROM (
+        SELECT * FROM student_scores
+        ORDER BY weighted_score DESC
+        LIMIT 30
+    ) AS top_students
+    UNION ALL
+    SELECT * FROM (
+        SELECT * FROM student_scores
+        ORDER BY weighted_score ASC
+        LIMIT 30
+    ) AS bottom_students;
+    """
+    conn = get_engine()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(query)
+    result = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return result
+
+
+# Function to calculate the mean of each 16PF factor and sort them
+def calculate_means(df):
+    factor_columns = [
+        'cfit_rank', 'attr_A', 'attr_B', 'attr_C', 'attr_E', 'attr_F', 'attr_G', 'attr_H',
+        'attr_I', 'attr_L', 'attr_M', 'attr_N', 'attr_O', 'attr_Q1', 'attr_Q2',
+        'attr_Q3', 'attr_Q4', 'attr_EX', 'attr_AX', 'attr_TM', 'attr_IN', 'attr_SC'
+    ]
+    factor_means = df[factor_columns].mean().sort_values(ascending=False)
+    return factor_means
+
+
+# Function to show common 16PF factors
+def show_common_16pf():
+    students = get_top_worst_students()
+    df = pd.DataFrame(students)
+
+    # Split into top 30 and worst 30
+    top_30 = df.iloc[:30]
+    worst_30 = df.iloc[30:]
+
+    # Calculate means of 16PF factors
+    top_30_means = calculate_means(top_30)
+    worst_30_means = calculate_means(worst_30)
+
+    # Create bar charts
+    top_30_fig = px.bar(top_30_means, title='Mean 16PF Factors in Top 30 Students')
+    worst_30_fig = px.bar(worst_30_means, title='Mean 16PF Factors in Worst 30 Students')
+
+    # Show the charts in Streamlit
+    st.plotly_chart(top_30_fig)
+    st.plotly_chart(worst_30_fig)
+
+    # Calculate squared mean differences with padding
+    mean_diff = top_30_means - worst_30_means
+    flat_padding = 0.1
+    mean_diff_padded = mean_diff + flat_padding * np.sign(mean_diff)
+
+    # Retain the sign and square the differences
+    mean_diff = np.sign(mean_diff_padded) * (mean_diff_padded ** 2)
+
+    mean_diff = mean_diff.sort_values(ascending=False)
+
+    # Create bar chart for squared mean differences
+    diff_fig = px.bar(mean_diff,
+                      title='Squared Differences (with padding) in Mean 16PF Factors Between Top 30 and Worst 30 Students')
+
+    # Show the difference chart in Streamlit
+    st.plotly_chart(diff_fig)
+
+    with st.expander("Rationale and How To Interpret This Chart"):
+        st.markdown("""
+        ## Interpretation Guide for This Section in The Dashboard
+        
+        The rationale behind the derived values in the charts is justified through the following key points:
+
+        - Need for deriving differences
+        - Squaring
+        - Direction-Relative Padding
+        - Calculation of CFIT values
+
+        #### Need for Deriving Differences Between Best and Worst Students
+
+        While the correlation between performance (grades, C-CERT) and features (16PF) is crucial in determining the attributes of a "good" computer studies student, it is equally important to identify the personality traits that distinguish "good" students from "bad" ones. By examining the differences in personality traits between high-performing and low-performing students, we can identify key attributes that significantly influence performance. This helps us hypothesize what "makes" a good student.
+
+        #### Squaring
+
+        Squaring values is a technique used to emphasize the magnitude of differences. Larger differences have a greater impact on the calculations, as demonstrated in established statistical models such as the sum of squared differences. This approach ensures that substantial differences are given more weight in the analysis.
+
+        #### Direction-Relative Padding
+
+        To prevent vanishing differences, a padding of 0.1 has been added to the values. Squaring values below 1 can cause them to diminish towards zero. To mitigate this, we apply a relative padding that maintains the direction of the difference. The padding is added based on the original direction of the difference: if the value is less than 0, we subtract 0.1; if the value is greater than 1, we add 0.1; otherwise, we add 0. 
+
+        #### Calculation for CFIT Values
+
+        The 16PF scores range from 1 to 10. To ensure consistency, we have assigned corresponding numerical values to CFIT rankings, which include:
+
+        - L (Low) = 2
+        - BA (Below Average) = 4
+        - A (Average) = 6
+        - AA (Above Average) = 8
+        - H (High) = 10
+
+        These values allow us to quantitatively assess CFIT rankings in relation to the 16PF scores.
+        """)

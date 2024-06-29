@@ -36,6 +36,9 @@ def retrieve_data_from_file(df):
     bsit = bsit.rename(columns={'ID Number': 'IDNumber'})
     bscs = bscs[bscs['Previous School'] != None]
     bsit = bsit[bsit['Previous School'] != None]
+    bscs['Previous School'] = bscs['Previous School'].str.strip()
+    bsit['Previous School'] = bsit['Previous School'].str.strip()
+
     return format_features(bscs), format_features(bsit), pd.read_excel('2324.xlsx',
                                                                        sheet_name='BSCS_FinalPerf'), pd.read_excel(
         '2324.xlsx', sheet_name='BSIT_FinalPerf'),
@@ -198,7 +201,7 @@ def load_merged_data_to_assessments(merged_df: pd.DataFrame):
             for index, row in merged_df.iterrows():
                 student_id = existing_students.get(row['IDNumber'])
 
-                if student_id in already_added:
+                if row['IDNumber'] in already_added:
                     continue
 
                 if student_id:
