@@ -24,20 +24,25 @@ def MainComponent():
     st.sidebar.title("CCS Dashboard Apps")
 
     result = st.sidebar.selectbox(options=["Home 🏠", 'About 16 Personalities 🤼‍️',
-                                           "Data Loading (ETL) 📦", "Model Training",
+                                           "Data Loading (ETL) 📦", "Model Training 🚀",
                                            "School Dashboards", "Year-on-Year Dashboards 💹",
-                                           "Grade Prediction Model", "Analytics Report"], label="Select an app to explore.")
+                                           "Grade Prediction Model 🪄", "Analytics Report",],
+                                  label="Select an app to explore.")
 
-
+    from pages_.model_training import ModelTrainingComponent
     from pages_.personalities import PersonalitiesComponent
     from pages_.home import HomeComponent
     from pages_.loader_view import LoaderComponent
     from pages_.yoy_view import YearOnYearComponent
+    from pages_.model_prediction import ModelPredictionComponent
+
     page_map = {
         'About 16 Personalities 🤼‍️': PersonalitiesComponent,
         'Home 🏠': HomeComponent,
         "Data Loading (ETL) 📦": LoaderComponent,
-        'Year-on-Year Dashboards 💹': YearOnYearComponent
+        'Year-on-Year Dashboards 💹': YearOnYearComponent,
+        'Model Training 🚀': ModelTrainingComponent,
+        "Grade Prediction Model 🪄" : ModelPredictionComponent
     }
 
 
