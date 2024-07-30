@@ -114,7 +114,7 @@ def ModelPredictionComponent():
 
     if file is not None:
 
-        model = joblib.load("deep-learning-model.joblib")
+        model = joblib.load("deep-learning-model.keras")
 
         data = data_shaping(file)
         predict_underway(data, model)

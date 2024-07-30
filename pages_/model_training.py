@@ -24,6 +24,10 @@ from sklearn.ensemble import RandomForestRegressor
 import numpy as np
 
 
+
+
+
+
 def ModelTrainingComponent():
     st.header("Model Training Pipeline 🚀")
     st.markdown("This section is for retraining and training models according to loaded datasets.")
@@ -50,7 +54,7 @@ def ModelTrainingComponent():
             log_loss = result[0]
             accuracy = result[1]
 
-            model.save('deep-learning-model.h5')
+            model.save('deep-learning-model.keras')
             st.info(f"Finished training model, with log loss of {log_loss:.4f}, accuracy of {round(accuracy * 100, 2)}%.")
 
 def fetch_data_as_dataframe(connection, query: str) -> pd.DataFrame:
@@ -67,12 +71,34 @@ def build_model(input_shape, num_classes=3):
         InputLayer(input_shape=(input_shape,)),
         Dense(160, activation='relu'),
         Dense(160, activation='relu'),
+        Dense(160, activation='relu'),
+        Dense(160, activation='relu'),
+        Dense(160, activation='relu'),
+        Dense(160, activation='relu'),
+        Dense(160, activation='relu'),
+        Dense(160, activation='relu'),
+        Dense(160, activation='relu'),
+        Dense(160, activation='relu'),
+        Dense(160, activation='relu'),
+        Dense(160, activation='relu'),
+        Dense(160, activation='relu'),
+        Dense(160, activation='relu'),
+        Dense(160, activation='relu'),
+        Dense(160, activation='relu'),
         Dense(num_classes, activation='softmax')
     ])
     model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
     return model
 
 def train_nn(df: pd.DataFrame, k=5):
+    import tensorflow as tf
+    devices = tf.config.list_physical_devices()
+    st.write("\nDevices: ", devices)
+
+    gpus = tf.config.list_physical_devices('GPU')
+    if gpus:
+        details = tf.config.experimental.get_device_details(gpus[0])
+        st.write("GPU details: ", details)
     old_grades = df.weighted
     df['weighted'] = df.weighted.apply(discretize_weights)
 
@@ -97,8 +123,6 @@ def train_nn(df: pd.DataFrame, k=5):
         model = build_model(X_train.shape[1], num_classes)
         early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
 
-        st.write(X_train)
-        st.write(y_train)
 
         history = model.fit(X_train, y_train, epochs=300, batch_size=15, validation_data=(X_test, y_test), callbacks=[early_stopping], verbose=1)
         evaluation = model.evaluate(X_test, y_test)
