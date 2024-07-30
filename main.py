@@ -25,8 +25,8 @@ def MainComponent():
 
     result = st.sidebar.selectbox(options=["Home 🏠", 'About 16 Personalities 🤼‍️',
                                            "Data Loading (ETL) 📦", "Model Training 🚀",
-                                           "School Dashboards", "Year-on-Year Dashboards 💹",
-                                           "Grade Prediction Model 🪄", "Analytics Report",],
+                                           "School Dashboards📓", "Year-on-Year Dashboards 💹",
+                                           "Batch Prediction 🪄", "Analytics Report",],
                                   label="Select an app to explore.")
 
     from pages_.model_training import ModelTrainingComponent
@@ -35,6 +35,7 @@ def MainComponent():
     from pages_.loader_view import LoaderComponent
     from pages_.yoy_view import YearOnYearComponent
     from pages_.model_prediction import ModelPredictionComponent
+    from pages_.school_dashboard import SchoolDashboardComponent
 
     page_map = {
         'About 16 Personalities 🤼‍️': PersonalitiesComponent,
@@ -42,7 +43,9 @@ def MainComponent():
         "Data Loading (ETL) 📦": LoaderComponent,
         'Year-on-Year Dashboards 💹': YearOnYearComponent,
         'Model Training 🚀': ModelTrainingComponent,
-        "Grade Prediction Model 🪄" : ModelPredictionComponent
+        "Batch Prediction 🪄" : ModelPredictionComponent,
+        "School Dashboards📓" : SchoolDashboardComponent
+
     }
 
 

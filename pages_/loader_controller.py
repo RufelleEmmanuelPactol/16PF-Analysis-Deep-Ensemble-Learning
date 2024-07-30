@@ -57,8 +57,6 @@ def load_schools(df: pd.DataFrame):
             cursor.execute("SELECT Name FROM Schools")
             existing_schools = set(name[0] for name in cursor.fetchall())
 
-            # Start a transaction
-            conn.start_transaction()
 
             # Loop through the schools and insert if not exists
             new_schools = [school for school in schools if school not in existing_schools]
@@ -75,9 +73,8 @@ def load_schools(df: pd.DataFrame):
 
     except Exception as e:
         print(f"An error occurred: {e}")
-        # Rollback the transaction in case of error
-        if conn.is_connected():
-            conn.rollback()
+        raise e
+
 
     finally:
         # Close the cursor and connection
@@ -147,10 +144,15 @@ def clean_final_data(df: pd.DataFrame) -> pd.DataFrame:
 
 def merge_and_clean(df16pf: pd.DataFrame, df_final: pd.DataFrame) -> pd.DataFrame:
     df = df16pf
-    df16pf['Previous School'] = df['Previous School'].str.replace(r'(?i)^University of Cebu.*', 'UNIVERSITY OF CEBU', regex=True)
-    df16pf['Previous School'] = df['Previous School'].str.replace(r'(?i)^University of San Carlos.*', 'UNIVERSITY OF '
-                                                                                                      'SAN CARLOS',
-                                                                  regex=True)
+    df16pf['Previous School'] = df16pf['Previous School'].str.replace(
+        r'(?i)^Un.*ty of Cebu.*', 'UNIVERSITY OF CEBU', regex=True)
+
+    # Update the 'Previous School' column to match variations of University of San Carlos
+    df16pf['Previous School'] = df16pf['Previous School'].str.replace(
+        r'(?i)^Un.*ty of San Carlos.*', 'UNIVERSITY OF SAN CARLOS', regex=True)
+
+    df16pf['Previous School'] = df16pf['Previous School'].str.replace(
+        r'(?i)^Un.*ty of San Jose.*', 'UNIVERSITY OF SAN JOSE RECOLETOS', regex=True)
     df_final = clean_final_data(df_final)
     return pd.merge(df16pf, df_final, on='IDNumber', how='inner')
 
