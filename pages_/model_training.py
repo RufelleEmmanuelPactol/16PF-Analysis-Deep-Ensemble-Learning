@@ -37,31 +37,16 @@ def ModelTrainingComponent():
     if st.button("Start Training! 🚀"):
         gen_set = str([item.id for item in selected]).replace("[", "(").replace("]", ")")
         query = f"""
-                       SELECT
-    (s.grade / 5) * 100 AS weighted,
-    s.attr_A, s.attr_B, s.attr_C, s.attr_E, s.attr_F, s.attr_H, s.attr_G, s.attr_I, s.attr_L, s.attr_M, s.attr_N, s.attr_O, s.attr_Q1, s.attr_Q2,
-    s.attr_Q3, s.attr_Q4, s.attr_EX, s.attr_AX, s.attr_TM, s.attr_IN, s.attr_SC,
-    IF(s.cfit = 'L', 2,
-        IF(s.cfit = 'BA', 4,
-        IF(s.cfit = 'A', 6, 
-        IF(s.cfit = 'AA', 8,
-        IF(s.cfit = 'H', 10, NULL))))) AS cfit, 
-    CASE WHEN s.course = 'BSCS' THEN 1 ELSE 0 END AS course_bscs,
-    CASE WHEN s.course = 'BSIT' THEN 1 ELSE 0 END AS course_bsit,
-    COALESCE(
-        (SELECT AVG(s2.grade) 
-         FROM students s2 
-         WHERE s2.previous_school_id = s.previous_school_id 
-         GROUP BY s2.previous_school_id 
-         HAVING COUNT(*) > 3),
-        (SELECT AVG(grade) FROM students)
-    ) AS school_avg
-FROM
-    students s
-INNER JOIN
-    assessments a ON a.student_id = s.Id
-WHERE
-    s.tagID IN {gen_set};
+                        SELECT ((grade-1)/4)*100 as weighted, attr_A, attr_B, attr_C, attr_E, attr_F, attr_H, attr_G, attr_I, attr_L, attr_M, attr_N, attr_O, attr_Q1, attr_Q2,
+                                attr_Q3, attr_Q4, attr_EX, attr_AX, attr_TM, attr_IN, attr_SC, IF(cfit = 'L', 2,
+                                IF(cfit = 'BA', 4,
+                                IF(cfit = 'A', 6, 
+                                IF(cfit = 'AA', 8,
+                                IF(cfit = 'H', 10, NULL))))) as cfit, 
+                                CASE when course = 'BSCS' then 1 else 0 end as course_bscs,
+                                CASE when course = 'BSIT' then 1 else 0 end as course_bsit
+                        FROM students
+                        INNER JOIN assessments s on s.student_id = students.Id WHERE tagID in {gen_set};
                         """
 
         df = fetch_data_as_dataframe(get_engine(), query)
