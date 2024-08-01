@@ -60,134 +60,6 @@ def ModelTrainingComponent():
             st.info(f"Finished training model, with log loss of {log_loss:.4f}, accuracy of {round(accuracy * 100, 2)}%.")
 
 
-def build_final_multiclass_model(input_shape, num_classes=3, learning_rate=0.001):
-    model = Sequential([
-        InputLayer(input_shape=(input_shape,)),
-        Dense(256, activation='relu'),
-        Dense(256, activation='relu'),
-        Dense(256, activation='relu'),
-        Dense(num_classes, activation='softmax')  # Output layer with softmax activation for classification
-    ])
-    optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
-    model.compile(loss='sparse_categorical_crossentropy', optimizer=optimizer, metrics=['accuracy'])
-    return model
-
-
-def train_final_multiclass_classifier(df: pd.DataFrame, failure_models, excellence_models, k=5):
-    # Get failure and excellence confidence scores
-    df['failure_confidence'] = 0
-    df['excellence_confidence'] = 0
-
-    for model in failure_models:
-        df.loc[df['weighted'] == 0, 'failure_confidence'] += model.predict(
-            df[df['weighted'] == 0].drop(columns=['weighted', 'failure_confidence', 'excellence_confidence']))
-
-    for model in excellence_models:
-        df.loc[df['weighted'] >= 2, 'excellence_confidence'] += model.predict(
-            df[df['weighted'] >= 2].drop(columns=['weighted', 'failure_confidence', 'excellence_confidence']))
-
-    df['failure_confidence'] /= len(failure_models)
-    df['excellence_confidence'] /= len(excellence_models)
-
-    X = df.drop(columns=['weighted'])
-    y = df['weighted']
-
-    kf = KFold(n_splits=k, shuffle=True, random_state=42)
-    all_histories = []
-    all_evaluations = []
-    models = []
-
-    for train_index, test_index in kf.split(df):
-        X_train, X_test = X.iloc[train_index], X.iloc[test_index]
-        y_train, y_test = y.iloc[train_index], y.iloc[test_index]
-
-        model = build_final_multiclass_model(X_train.shape[1])
-        early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=20, restore_best_weights=True)
-
-        history = model.fit(X_train, y_train, epochs=100, batch_size=15, validation_data=(X_test, y_test),
-                            callbacks=[early_stopping], verbose=1)
-        evaluation = model.evaluate(X_test, y_test)
-
-        all_histories.append(history)
-        all_evaluations.append(evaluation)
-        models.append(model)
-
-    avg_evaluation = np.mean(all_evaluations, axis=0)
-    return models, avg_evaluation, all_histories
-
-
-def train_excellence_classifier(df: pd.DataFrame, k=5):
-    df_excellence = df[df['weighted'] >= 2]
-    df_excellence['target'] = df_excellence['weighted'] > 4.2  # Set target for binary classification
-    kf = KFold(n_splits=k, shuffle=True, random_state=42)
-    all_histories = []
-    all_evaluations = []
-    models = []
-
-    for train_index, test_index in kf.split(df_excellence):
-        X_train, X_test = df_excellence.drop(columns=['weighted', 'target']).iloc[train_index], \
-        df_excellence.drop(columns=['weighted', 'target']).iloc[test_index]
-        y_train, y_test = df_excellence['target'].iloc[train_index], df_excellence['target'].iloc[test_index]
-
-        model = build_binary_model(X_train.shape[1])
-        early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=20, restore_best_weights=True)
-
-        history = model.fit(X_train, y_train, epochs=100, batch_size=15, validation_data=(X_test, y_test),
-                            callbacks=[early_stopping], verbose=1)
-        evaluation = model.evaluate(X_test, y_test)
-
-        all_histories.append(history)
-        all_evaluations.append(evaluation)
-        models.append(model)
-
-    avg_evaluation = np.mean(all_evaluations, axis=0)
-    return models, avg_evaluation, all_histories
-
-
-def build_binary_model(input_shape, learning_rate=0.001):
-    model = Sequential([
-        InputLayer(input_shape=(input_shape,)),
-        Dense(256, activation='relu'),
-        Dense(256, activation='relu'),
-        Dense(256, activation='relu'),
-        Dense(1, activation='sigmoid')  # Output layer with sigmoid activation for binary classification
-    ])
-    optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
-    model.compile(loss='binary_crossentropy', optimizer=optimizer, metrics=['accuracy'])
-    return model
-
-
-def train_failure_classifier(df: pd.DataFrame, k=5):
-    df_fail = df[df['weighted'] == 0]
-    df_fail['target'] = 1  # Set target for binary classification
-    kf = KFold(n_splits=k, shuffle=True, random_state=42)
-    all_histories = []
-    all_evaluations = []
-    models = []
-
-    for train_index, test_index in kf.split(df_fail):
-        X_train, X_test = df_fail.drop(columns=['weighted', 'target']).iloc[train_index], \
-        df_fail.drop(columns=['weighted', 'target']).iloc[test_index]
-        y_train, y_test = df_fail['target'].iloc[train_index], df_fail['target'].iloc[test_index]
-
-        model = build_binary_model(X_train.shape[1])
-        early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=20, restore_best_weights=True)
-
-        history = model.fit(X_train, y_train, epochs=300, batch_size=15, validation_data=(X_test, y_test),
-                            callbacks=[early_stopping], verbose=1)
-        evaluation = model.evaluate(X_test, y_test)
-
-        all_histories.append(history)
-        all_evaluations.append(evaluation)
-        models.append(model)
-
-    avg_evaluation = np.mean(all_evaluations, axis=0)
-    return models, avg_evaluation, all_histories
-
-
-
-
-
 
 
 
@@ -246,21 +118,6 @@ def train_nn(df: pd.DataFrame, k=5):
     X_resampled = X_resampled.values
     y_resampled = y_resampled.values
 
-    failure, _, h = train_failure_classifier(df)
-    st.info(f"Failure Percent: {h[0].history['accuracy']}")
-
-    success, _, h = train_excellence_classifier(df)
-    st.info(f"Success Percent: {h[0].history['accuracy']}")
-
-    model, _, h = train_final_multiclass_classifier(df, failure, success)
-    st.info(f"Final Percent: {h[0].history['accuracy']}")
-    history = h[0]
-
-
-
-
-    """
-
     kf = KFold(n_splits=k, shuffle=True, random_state=42)
     fold = 1
     all_histories = []
@@ -285,8 +142,6 @@ def train_nn(df: pd.DataFrame, k=5):
 
     avg_evaluation = np.mean(all_evaluations, axis=0)
     st.write(f"Average Evaluation: {avg_evaluation}")
-    
-    """
 
     plt.figure(figsize=(10, 6))
     plt.plot(history.history['accuracy'], label='Train Accuracy')
@@ -317,7 +172,7 @@ def train_nn(df: pd.DataFrame, k=5):
     st.write(w_df)
     st.info(f"Mean train-test difference for the last fold: {round(accuracy_diff.mean() * 100, 2)}%")
 
-    return #model, model.evaluate(X_test, y_test)
+    return model, model.evaluate(X_test, y_test)
 
 def discretize_weights(weight):
     if weight < 50:
