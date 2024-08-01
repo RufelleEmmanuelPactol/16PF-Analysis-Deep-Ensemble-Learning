@@ -43,7 +43,7 @@ def ModelTrainingComponent():
                                 IF(cfit = 'A', 6, 
                                 IF(cfit = 'AA', 8,
                                 IF(cfit = 'H', 10, NULL))))) as cfit, 
-                                CASE when course = 'BSCS' then 1 else 0 end as course_bscs
+                                CASE when course = 'BSCS' then 1 else 0 end as course_bscs,
                                 CASE when course = 'BSIT' then 1 else 0 end as course_bsit
                         FROM students
                         INNER JOIN assessments s on s.student_id = students.Id WHERE tagID in {gen_set};
