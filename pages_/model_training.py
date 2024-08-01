@@ -71,24 +71,24 @@ def fetch_data_as_dataframe(connection, query: str) -> pd.DataFrame:
 def build_model(input_shape, num_classes):
     model = Sequential([
         InputLayer(input_shape=(input_shape,)),
-        Dense(342, activation='relu'),
-        Dense(342, activation='relu'),
-        Dense(342, activation='relu'),
-        Dense(342, activation='relu'),
-        Dense(342, activation='relu'),
-        Dense(342, activation='relu'),
-        Dense(342, activation='relu'),
-        Dense(342, activation='relu'),
-        Dense(342, activation='relu'),
-        Dense(342, activation='relu'),
-        Dense(342, activation='relu'),
-        Dense(342, activation='relu'),
-        Dense(342, activation='relu'),
-        Dense(342, activation='relu'),
-        Dense(342, activation='relu'),
-        Dense(342, activation='relu'),
-        Dense(342, activation='relu'),
-        Dense(342, activation='relu'),
+        Dense(64, activation='relu'),
+        Dense(64, activation='relu'),
+        Dense(64, activation='relu'),
+        Dense(64, activation='relu'),
+        Dense(64, activation='relu'),
+        Dense(64, activation='relu'),
+        Dense(64, activation='relu'),
+        Dense(64, activation='relu'),
+        Dense(64, activation='relu'),
+        Dense(64, activation='relu'),
+        Dense(64, activation='relu'),
+        Dense(64, activation='relu'),
+        Dense(64, activation='relu'),
+        Dense(64, activation='relu'),
+        Dense(64, activation='relu'),
+        Dense(64, activation='relu'),
+        Dense(64, activation='relu'),
+        Dense(64, activation='relu'),
 
 
         Dense(num_classes, activation='softmax')  # Output layer with softmax activation for classification
@@ -106,6 +106,9 @@ def train_nn(df: pd.DataFrame, k=5):
     num_classes = 3
     st.write(f"Classes: [0: 'Fail', 1: 'Pass', 2: 'Excel']")
 
+    st.markdown("#### Input Data")
+    st.write(df)
+
     # smote = SMOTE(random_state=42)
     X_resampled, y_resampled = (df.drop(columns=['weighted']), df['weighted'])
 
@@ -122,7 +125,7 @@ def train_nn(df: pd.DataFrame, k=5):
         y_train, y_test = y_resampled[train_index], y_resampled[test_index]
 
         model = build_model(X_train.shape[1], num_classes)
-        early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=30, restore_best_weights=True)
+        early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=20, restore_best_weights=True)
 
 
         history = model.fit(X_train, y_train, epochs=300, batch_size=10, validation_data=(X_test, y_test), callbacks=[early_stopping], verbose=1)
