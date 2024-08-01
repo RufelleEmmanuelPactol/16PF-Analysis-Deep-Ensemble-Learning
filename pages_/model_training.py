@@ -94,7 +94,7 @@ def build_model(input_shape, num_classes):
         Dense(num_classes, activation='softmax')  # Output layer with softmax activation for classification
     ])
 
-    optimizer = tf.keras.optimizers.Adam(learning_rate=0.005)
+    optimizer = tf.keras.optimizers.Adam(learning_rate=0.02)
     model.compile(loss='sparse_categorical_crossentropy', optimizer=optimizer, metrics=['accuracy'])
     return model
 
@@ -122,7 +122,7 @@ def train_nn(df: pd.DataFrame, k=5):
         y_train, y_test = y_resampled[train_index], y_resampled[test_index]
 
         model = build_model(X_train.shape[1], num_classes)
-        early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=100, restore_best_weights=True)
+        early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=30, restore_best_weights=True)
 
 
         history = model.fit(X_train, y_train, epochs=300, batch_size=10, validation_data=(X_test, y_test), callbacks=[early_stopping], verbose=1)
