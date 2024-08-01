@@ -85,7 +85,7 @@ def predict_underway(df: pd.DataFrame, model):
 
 import tensorflow.keras as keras
 def ModelPredictionComponent():
-    model = keras.models.load_model('deep-learning-model.h5')
+    model = keras.models.load_model('deep-learning-model.keras')
     st.header("Model Prediction 🪄")
     st.markdown("⚠️\t For this section, utilize the given template to generate a prediction.")
     with open('DataTrainingTemplate.xlsx', 'rb') as file:
@@ -102,9 +102,8 @@ def ModelPredictionComponent():
         mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     )
 
-    st.info(f"The model's last recorded accuracy was {round(accuracy, 2)} units. "
-            f""
-            f"Note that this will be used during efforts to discretize the data.", icon="ℹ️")
+    st.info(f"The model's last recorded accuracy was {round(accuracy, 2)}%. "
+            f"", icon="ℹ️")
 
     file = st.file_uploader("Please load the dataset provided that it follows the template standard.", type="xlsx")
 
@@ -113,8 +112,6 @@ def ModelPredictionComponent():
     upper_bound = 50 + (accuracy/2)
 
     if file is not None:
-
-        model = joblib.load("deep-learning-model.keras")
 
         data = data_shaping(file)
         predict_underway(data, model)

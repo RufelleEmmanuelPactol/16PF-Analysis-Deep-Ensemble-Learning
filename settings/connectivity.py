@@ -1,12 +1,10 @@
 from typing import Union
 
-import sqlalchemy.orm
+import mysql.connector
 from mysql.connector.abstracts import MySQLConnectionAbstract
 from mysql.connector.pooling import PooledMySQLConnection
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship
-from sqlalchemy import create_engine, Column, Integer, String, ForeignKey
-import mysql.connector
+
 Base = declarative_base()
 
 
