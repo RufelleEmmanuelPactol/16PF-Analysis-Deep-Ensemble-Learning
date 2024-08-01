@@ -101,6 +101,7 @@ def build_model(input_shape, num_classes):
 def train_nn(df: pd.DataFrame, k=5):
     import tensorflow as tf
     old_grades = df.weighted
+    st.write(old_grades)
     df['weighted'] = df.weighted.apply(discretize_weights)
 
     num_classes = 3
