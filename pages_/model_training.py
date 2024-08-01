@@ -66,7 +66,7 @@ def fetch_data_as_dataframe(connection, query: str) -> pd.DataFrame:
     df = pd.DataFrame(result_set, columns=column_names)
     return df.dropna()
 
-def build_model(input_shape, num_classes=3):
+def build_model(input_shape, num_classes):
     model = Sequential([
         InputLayer(input_shape=(input_shape,)),
         Dense(160, activation='relu'),
@@ -81,26 +81,17 @@ def build_model(input_shape, num_classes=3):
         Dense(160, activation='relu'),
         Dense(160, activation='relu'),
         Dense(160, activation='relu'),
-        Dense(160, activation='relu'),
-        Dense(160, activation='relu'),
-        Dense(160, activation='relu'),
-        Dense(160, activation='relu'),
-        Dense(num_classes, activation='softmax')
+
+        Dense(num_classes, activation='softmax')  # Output layer with softmax activation for classification
     ])
     model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
     return model
 
 def train_nn(df: pd.DataFrame, k=5):
     import tensorflow as tf
-    devices = tf.config.list_physical_devices()
-    st.write("\nDevices: ", devices)
-
-    gpus = tf.config.list_physical_devices('GPU')
-    if gpus:
-        details = tf.config.experimental.get_device_details(gpus[0])
-        st.write("GPU details: ", details)
     old_grades = df.weighted
     df['weighted'] = df.weighted.apply(discretize_weights)
+    df = pd.get_dummies(df, columns=['course'])
 
     num_classes = 3
     st.write(f"Classes: [0: 'Fail', 1: 'Pass', 2: 'Excel']")
