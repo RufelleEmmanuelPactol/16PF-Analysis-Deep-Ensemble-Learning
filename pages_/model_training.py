@@ -104,7 +104,7 @@ def train_final_multiclass_classifier(df: pd.DataFrame, failure_models, excellen
         model = build_final_multiclass_model(X_train.shape[1])
         early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=20, restore_best_weights=True)
 
-        history = model.fit(X_train, y_train, epochs=300, batch_size=15, validation_data=(X_test, y_test),
+        history = model.fit(X_train, y_train, epochs=100, batch_size=15, validation_data=(X_test, y_test),
                             callbacks=[early_stopping], verbose=1)
         evaluation = model.evaluate(X_test, y_test)
 
@@ -118,7 +118,7 @@ def train_final_multiclass_classifier(df: pd.DataFrame, failure_models, excellen
 
 def train_excellence_classifier(df: pd.DataFrame, k=5):
     df_excellence = df[df['weighted'] >= 2]
-    df_excellence['target'] = df_excellence['weighted'] > 4.5  # Set target for binary classification
+    df_excellence['target'] = df_excellence['weighted'] > 4.2  # Set target for binary classification
     kf = KFold(n_splits=k, shuffle=True, random_state=42)
     all_histories = []
     all_evaluations = []
@@ -132,7 +132,7 @@ def train_excellence_classifier(df: pd.DataFrame, k=5):
         model = build_binary_model(X_train.shape[1])
         early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=20, restore_best_weights=True)
 
-        history = model.fit(X_train, y_train, epochs=300, batch_size=15, validation_data=(X_test, y_test),
+        history = model.fit(X_train, y_train, epochs=100, batch_size=15, validation_data=(X_test, y_test),
                             callbacks=[early_stopping], verbose=1)
         evaluation = model.evaluate(X_test, y_test)
 
@@ -252,7 +252,7 @@ def train_nn(df: pd.DataFrame, k=5):
     success, _, h = train_excellence_classifier(df)
     st.info(f"Success Percent: {h[0].history['accuracy']}")
 
-    final, _, h = train_final_multiclass_classifier(df, failure, success)
+    model, _, h = train_final_multiclass_classifier(df, failure, success)
     st.info(f"Final Percent: {h[0].history['accuracy']}")
     history = h[0]
 
