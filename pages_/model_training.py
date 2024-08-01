@@ -37,16 +37,31 @@ def ModelTrainingComponent():
     if st.button("Start Training! 🚀"):
         gen_set = str([item.id for item in selected]).replace("[", "(").replace("]", ")")
         query = f"""
-                        SELECT  (grade/5)*100 as weighted, attr_A, attr_B, attr_C, attr_E, attr_F, attr_H, attr_G, attr_I, attr_L, attr_M, attr_N, attr_O, attr_Q1, attr_Q2,
-                                attr_Q3, attr_Q4, attr_EX, attr_AX, attr_TM, attr_IN, attr_SC, IF(cfit = 'L', 2,
-                                IF(cfit = 'BA', 4,
-                                IF(cfit = 'A', 6, 
-                                IF(cfit = 'AA', 8,
-                                IF(cfit = 'H', 10, NULL))))) as cfit, 
-                                CASE when course = 'BSCS' then 1 else 0 end as course_bscs,
-                                CASE when course = 'BSIT' then 1 else 0 end as course_bsit
-                        FROM students
-                        INNER JOIN assessments s on s.student_id = students.Id WHERE tagID in {gen_set};
+                        SELECT
+    (grade / 5) * 100 AS weighted,
+    attr_A, attr_B, attr_C, attr_E, attr_F, attr_H, attr_G, attr_I, attr_L, attr_M, attr_N, attr_O, attr_Q1, attr_Q2,
+    attr_Q3, attr_Q4, attr_EX, attr_AX, attr_TM, attr_IN, attr_SC,
+    IF(cfit = 'L', 2,
+        IF(cfit = 'BA', 4,
+        IF(cfit = 'A', 6, 
+        IF(cfit = 'AA', 8,
+        IF(cfit = 'H', 10, NULL))))) AS cfit, 
+    CASE WHEN course = 'BSCS' THEN 1 ELSE 0 END AS course_bscs,
+    CASE WHEN course = 'BSIT' THEN 1 ELSE 0 END AS course_bsit,
+    COALESCE(
+        (SELECT AVG(grade) 
+         FROM students s2 
+         WHERE s2.previous_school_id = students.previous_school_id 
+         GROUP BY s2.previous_school_id 
+         HAVING COUNT(*) > 3),
+        (SELECT AVG(grade) FROM students)
+    ) AS school_avg
+FROM
+    students
+INNER JOIN
+    assessments s ON s.student_id = students.Id
+WHERE
+    tagID IN {gen_set};
                         """
 
         df = fetch_data_as_dataframe(get_engine(), query)
