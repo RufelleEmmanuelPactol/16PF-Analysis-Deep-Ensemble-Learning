@@ -30,7 +30,7 @@ import numpy as np
 
 def ModelTrainingComponent():
     st.header("Model Training Pipeline 🚀")
-    st.markdown("This section is for retraining and training models according to loaded datasets.")
+    st.markdown("This section is for retraining and training models according to loaded datasets. [V-1]")
     tags = get_tags()
 
     selected = st.multiselect(label="Select datasets to include in training", options=tags)
