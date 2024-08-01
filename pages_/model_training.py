@@ -175,9 +175,9 @@ def train_nn(df: pd.DataFrame, k=5):
 def discretize_weights(weight):
     if weight < 50:
         return 0
-    if 30 <= weight < 65:
+    if 30 <= weight < 80:
         return 1
-    if 65 <= weight <= 100:
+    if 80 <= weight <= 100:
         return 2
 
 # Note: Ensure that all required dependencies are installed and the Streamlit app is set up correctly.
