@@ -42,7 +42,9 @@ def ModelTrainingComponent():
                                 IF(cfit = 'BA', 4,
                                 IF(cfit = 'A', 6, 
                                 IF(cfit = 'AA', 8,
-                                IF(cfit = 'H', 10, NULL))))) as cfit, CASE when course = 'BSCS' then 1 else 0 end as course
+                                IF(cfit = 'H', 10, NULL))))) as cfit, 
+                                CASE when course = 'BSCS' then 1 else 0 end as course_bscs
+                                CASE when course = 'BSIT' then 1 else 0 end as course_bsit
                         FROM students
                         INNER JOIN assessments s on s.student_id = students.Id WHERE tagID in {gen_set};
                         """
@@ -91,7 +93,6 @@ def train_nn(df: pd.DataFrame, k=5):
     import tensorflow as tf
     old_grades = df.weighted
     df['weighted'] = df.weighted.apply(discretize_weights)
-    df = pd.get_dummies(df, columns=['course'])
 
     num_classes = 3
     st.write(f"Classes: [0: 'Fail', 1: 'Pass', 2: 'Excel']")
