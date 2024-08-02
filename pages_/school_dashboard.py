@@ -1,6 +1,7 @@
 import pandas as pd
 import streamlit as st
 from settings.connectivity import get_engine
+import plotly.express as px
 
 CURRENT_ID = None
 
@@ -143,35 +144,102 @@ def get_stats():
         'Average Value']) / basic_stat_2_extended['Average Value'] * 100
 
     # Display the DataFrames
-    st.markdown("#### Basic School Statistics (Averaged By School Year)")
-    rank = get_school_rank()
-    st.markdown("**" + (rank if isinstance(rank, str) else "School Rank " + str(int(rank))) + "**")
-
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown(basic_stat_2_extended.to_markdown(index=False))
-    with col2:
-        st.markdown(basic_stat.transpose().reset_index().to_markdown(index=False))
 
 
-    with st.expander("Show Attribute Statistics"):
-        attr_stat = df.drop(
-            columns=['Total Count', 'BSCS Count', 'BSIT Count', 'C Cert', 'Average Passing Grade', 'Passing Rate'])
-        st.markdown(attr_stat.transpose().reset_index().to_markdown(index=False))
+
+
+    return df, overall_df
 
 
 def SchoolDashboardComponent():
-    st.header("School Dashboards📓")
-    st.markdown("💡Know more about school-based performance.")
+
+
+    st.title("🏫 School Performance Dashboard")
+    st.markdown("Analyze and compare school-based performance metrics.")
 
     with st.spinner("Loading schools..."):
         schools = get_schools()
-    selected = st.selectbox(options=schools, label="Select a school to introspect.")
+
+    selected = st.selectbox("Select a school to analyze:", options=schools, format_func=lambda x: x.name)
+
     if selected.name:
         global CURRENT_ID
         CURRENT_ID = selected.id
         with st.spinner("Loading school information..."):
-            get_stats()
+            display_school_stats(selected.name)
+
+
+def display_school_stats(school_name):
+    st.header(f"📊 Statistics for {school_name}")
+
+    # Get the data
+    df, overall_df = get_stats()
+
+    # Display school rank
+    rank = get_school_rank()
+    st.metric("School Rank", value=int(rank) if isinstance(rank, (int, float)) else "N/A")
+
+    # Basic statistics
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total Students", int(df['Total Count'].values[0]))
+    with col2:
+        st.metric("BSCS Students", int(df['BSCS Count'].values[0]))
+    with col3:
+        st.metric("BSIT Students", int(df['BSIT Count'].values[0]))
+
+    # Key performance indicators
+    st.subheader("Key Performance Indicators")
+    kpi_cols = st.columns(3)
+    kpis = ['C Cert', 'Average Passing Grade', 'Passing Rate']
+    for i, kpi in enumerate(kpis):
+        school_value = df[kpi].values[0]
+        avg_value = overall_df[kpi].values[0]
+
+        if school_value is not None and avg_value is not None and avg_value != 0:
+            diff = ((school_value - avg_value) / avg_value) * 100
+            kpi_cols[i].metric(
+                kpi,
+                f"{school_value:.2f}",
+                f"{diff:+.2f}% vs Average",
+                delta_color="normal" if diff >= 0 else "inverse"
+            )
+        else:
+            if school_value is not None:
+                kpi_cols[i].metric(kpi, f"{school_value:.2f}", "No comparison available")
+            else:
+                kpi_cols[i].metric(kpi, "N/A", "No data available")
+
+    # Attribute comparison chart
+    st.subheader("Attribute Comparison")
+    attr_df = df.drop(
+        columns=['Total Count', 'BSCS Count', 'BSIT Count', 'C Cert', 'Average Passing Grade', 'Passing Rate'])
+    attr_df_melted = pd.melt(attr_df.reset_index(), id_vars=['index'], var_name='Attribute', value_name='Value')
+    attr_df_melted = attr_df_melted[~attr_df_melted['Attribute'].str.contains('Average|Difference')]
+
+    # Remove rows with NaN values
+    attr_df_melted = attr_df_melted.dropna()
+
+    if not attr_df_melted.empty:
+        fig = px.bar(attr_df_melted, x='Attribute', y='Value', title='School vs Overall Average')
+
+        # Create a list of overall average values
+        overall_avg_values = [overall_df[attr].values[0] if attr in overall_df.columns else np.nan for attr in
+                              attr_df_melted['Attribute']]
+
+        fig.add_scatter(
+            x=attr_df_melted['Attribute'],
+            y=overall_avg_values,
+            mode='lines',
+            name='Overall Average'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning("No attribute data available for comparison.")
+
+    # Detailed statistics in expander
+    with st.expander("View Detailed Statistics"):
+        st.dataframe(df.style.highlight_max(axis=0))
 
 
 

@@ -1,12 +1,287 @@
 import numpy as np
 import pandas as pd
 import streamlit as st
+from plotly.subplots import make_subplots
+
 from settings.connectivity import get_engine
 import plotly.express as px
 import plotly.figure_factory as ff
+import numpy as np
+import pandas as pd
+import streamlit as st
+from settings.connectivity import get_engine
+import plotly.express as px
+import plotly.graph_objects as go
+
 
 
 @st.cache_data
+def display_stats():
+    bscs_df, bsit_df = get_stat()
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("BSCS Statistics")
+        fig = go.Figure(data=[go.Table(
+            header=dict(values=list(bscs_df.columns),
+                        fill_color='paleturquoise',
+                        align='left'),
+            cells=dict(values=[bscs_df.Metric, bscs_df.Value],
+                       fill_color='lavender',
+                       align='left'))
+        ])
+        fig.update_layout(margin=dict(l=0, r=0, t=0, b=0))
+        st.plotly_chart(fig, use_container_width=True)
+
+    with col2:
+        st.subheader("BSIT Statistics")
+        fig = go.Figure(data=[go.Table(
+            header=dict(values=list(bsit_df.columns),
+                        fill_color='paleturquoise',
+                        align='left'),
+            cells=dict(values=[bsit_df.Metric, bsit_df.Value],
+                       fill_color='lavender',
+                       align='left'))
+        ])
+        fig.update_layout(margin=dict(l=0, r=0, t=0, b=0))
+        st.plotly_chart(fig, use_container_width=True)
+
+def best_school():
+    query = f"""
+    WITH school_stats AS (
+        SELECT
+            s.Name,
+            COUNT(*) as student_count,
+            AVG(CASE WHEN a.grade >= 3 THEN a.grade END) / 5 as avg_passing_grade,
+            SUM(CASE WHEN a.grade >= 3 THEN 1 ELSE 0 END) / COUNT(*) * 100 as passing_rate,
+            AVG(a.c_cert) / 80 as avg_ccert_grade,
+            (0.5 * (AVG(CASE WHEN a.grade >= 3 THEN a.grade END) / 5) + 
+             0.3 * (SUM(CASE WHEN a.grade >= 3 THEN 1 ELSE 0 END) / COUNT(*) * 100) / 100 + 
+             0.2 * (AVG(a.c_cert) / 80)) * 100 as weighted_score
+        FROM
+            students
+        INNER JOIN
+            Schools s
+        ON
+            students.previous_school_id = s.Id
+        INNER JOIN
+            assessments a
+        ON
+            students.Id = a.student_id
+        WHERE students.tagID = {TAG_ID}
+        GROUP BY
+            s.Id
+        HAVING
+            student_count > 3
+    )
+    SELECT
+        'Best' as Performance,
+        Name,
+        student_count,
+        ROUND(avg_passing_grade * 100, 2) as avg_passing_grade,
+        ROUND(passing_rate, 2) as passing_rate,
+        ROUND(avg_ccert_grade * 100, 2) as avg_ccert_grade,
+        ROUND(weighted_score, 2) as weighted_score
+    FROM
+        school_stats
+    ORDER BY
+        weighted_score DESC
+    LIMIT 1;
+    """
+    conn = get_engine()
+    cursor = conn.cursor()
+    cursor.execute(query)
+    result = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    columns = ["Performance", "Name", "Student Count", "Average Passing Grade", "Passing Rate (%)",
+               "Average CCERT Grade (%)", "Weighted Score (%)"]
+
+    df = pd.DataFrame([result], columns=columns)
+    df['Average Passing Grade'] = df["Average Passing Grade"].apply(lambda x: (x * 5) / 100)
+
+    df = df.T.reset_index()
+    df.columns = ["Metric", "Value"]
+
+    fig = go.Figure(data=[go.Table(
+        header=dict(values=list(df.columns),
+                    fill_color='paleturquoise',
+                    align='left'),
+        cells=dict(values=[df.Metric, df.Value],
+                   fill_color='lavender',
+                   align='left'))
+    ])
+    fig.update_layout(margin=dict(l=0, r=0, t=0, b=0))
+    st.plotly_chart(fig, use_container_width=True)
+
+def worst_school():
+    query = f"""
+    WITH school_stats AS (
+        SELECT
+            s.Name,
+            COUNT(*) as student_count,
+            AVG(CASE WHEN a.grade >= 3 THEN a.grade END) / 5 as avg_passing_grade,
+            SUM(CASE WHEN a.grade >= 3 THEN 1 ELSE 0 END) / COUNT(*) * 100 as passing_rate,
+            AVG(a.c_cert) / 80 as avg_ccert_grade,
+            (0.5 * (AVG(CASE WHEN a.grade >= 3 THEN a.grade END) / 5) + 
+             0.3 * (SUM(CASE WHEN a.grade >= 3 THEN 1 ELSE 0 END) / COUNT(*) * 100) / 100 + 
+             0.2 * (AVG(a.c_cert) / 80)) * 100 as weighted_score
+        FROM
+            students
+        INNER JOIN
+            Schools s
+        ON
+            students.previous_school_id = s.Id
+        INNER JOIN
+            assessments a
+        ON
+            students.Id = a.student_id
+        WHERE students.tagID = {TAG_ID}
+        GROUP BY
+            s.Id
+        HAVING
+            student_count > 3
+    )
+    SELECT
+        'Worst' as Performance,
+        Name,
+        student_count,
+        ROUND(avg_passing_grade * 100, 2) as avg_passing_grade,
+        ROUND(passing_rate, 2) as passing_rate,
+        ROUND(avg_ccert_grade * 100, 2) as avg_ccert_grade,
+        ROUND(weighted_score, 2) as weighted_score
+    FROM
+        school_stats
+    ORDER BY
+        weighted_score ASC
+    LIMIT 1;
+    """
+    conn = get_engine()
+    cursor = conn.cursor()
+    cursor.execute(query)
+    result = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    columns = ["Performance", "Name", "Student Count", "Average Passing Grade", "Passing Rate (%)",
+               "Average CCERT Grade (%)", "Weighted Score (%)"]
+
+    df = pd.DataFrame([result], columns=columns)
+    df['Average Passing Grade'] = df["Average Passing Grade"].apply(lambda x: (x * 5) / 100)
+
+    df = df.T.reset_index()
+    df.columns = ["Metric", "Value"]
+
+    fig = go.Figure(data=[go.Table(
+        header=dict(values=list(df.columns),
+                    fill_color='paleturquoise',
+                    align='left'),
+        cells=dict(values=[df.Metric, df.Value],
+                   fill_color='lavender',
+                   align='left'))
+    ])
+    fig.update_layout(margin=dict(l=0, r=0, t=0, b=0))
+    st.plotly_chart(fig, use_container_width=True)
+
+def show_corr():
+    query = f"""
+    SELECT 
+        attr_A, attr_B, attr_C, attr_E, attr_F, attr_G, attr_H, attr_I, attr_L, attr_M, 
+        attr_N, attr_O, attr_Q1, attr_Q2, attr_Q3, attr_Q4, attr_EX, attr_AX, attr_TM, 
+        attr_IN, attr_SC, c_cert, grade
+    FROM 
+        assessments 
+    LEFT JOIN students s on s.id = assessments.student_id 
+    WHERE tagID = {TAG_ID}
+    """
+
+    conn = get_engine()
+    cursor = conn.cursor()
+
+    cursor.execute(query)
+    result = cursor.fetchall()
+
+    columns = [desc[0] for desc in cursor.description]
+    df = pd.DataFrame(result, columns=columns)
+
+    corr_matrix = df.corr()
+
+    fig_heatmap = px.imshow(corr_matrix,
+                            title='Correlation Heatmap',
+                            color_continuous_scale='RdBu_r',
+                            zmin=-1, zmax=1)
+    st.plotly_chart(fig_heatmap, use_container_width=True)
+
+    corr_with_c_cert = corr_matrix['c_cert'].drop(['c_cert', 'grade']).sort_values(ascending=False, key=abs)
+    corr_with_grade = corr_matrix['grade'].drop(['c_cert', 'grade']).sort_values(ascending=False, key=abs)
+
+    fig_c_cert = px.bar(
+        x=corr_with_c_cert.index,
+        y=corr_with_c_cert.values,
+        title='Correlation with CCert Grades',
+        labels={'x': 'Features', 'y': 'Correlation'},
+        text_auto=True
+    )
+
+    fig_grade = px.bar(
+        x=corr_with_grade.index,
+        y=corr_with_grade.values,
+        title='Correlation with Grade',
+        labels={'x': 'Features', 'y': 'Correlation'},
+        text_auto=True
+    )
+
+    st.plotly_chart(fig_c_cert, use_container_width=True)
+
+
+    cursor.close()
+    conn.close()
+
+def best_students():
+    query = """
+    SELECT
+        s.student_id,
+        s.course,
+        sch.Name as school,
+        a.c_cert,
+        a.grade,
+        ROUND((0.5 * (a.grade / 5) + 0.5 * (a.c_cert / 80)), 2) as weighted_score
+    FROM
+        students s
+    INNER JOIN
+        assessments a
+    ON
+        s.Id = a.student_id
+    INNER JOIN
+        Schools sch
+    ON
+        s.previous_school_id = sch.Id
+    ORDER BY
+        weighted_score DESC
+    LIMIT 10;
+    """
+
+    conn = get_engine()
+    cursor = conn.cursor()
+
+    cursor.execute(query)
+    result = cursor.fetchall()
+
+    columns = ["StudentID", "Course", "School", "CCert", "Final Grade", "Weighted Score"]
+    df = pd.DataFrame(result, columns=columns)
+
+    fig = go.Figure(data=[go.Table(
+        header=dict(values=list(df.columns),
+                    fill_color='paleturquoise',
+                    align='left'),
+        cells=dict(values=[df[col] for col in df.columns],
+                   fill_color='lavender',
+                   align='left'))
+    ])
+    fig.update_layout(margin=dict(l=0, r=0, t=0, b=0))
+    st.plotly_chart(fig, use_container_width=True)
 def get_tags():
     connection = get_engine()
     if not connection:
@@ -130,20 +405,35 @@ def get_stat():
 
 # Streamlit display function
 def display_stats():
-    st.subheader("General Statistics")
-
     bscs_df, bsit_df = get_stat()
 
     col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown("#### BSCS Statistics")
-        st.markdown(bscs_df.to_markdown(index=False))
+        st.subheader("BSCS Statistics")
+        fig = go.Figure(data=[go.Table(
+            header=dict(values=list(bscs_df.columns),
+                        fill_color='paleturquoise',
+                        align='left'),
+            cells=dict(values=[bscs_df.Metric, bscs_df.Value],
+                       fill_color='lavender',
+                       align='left'))
+        ])
+        fig.update_layout(margin=dict(l=0, r=0, t=0, b=0))
+        st.plotly_chart(fig, use_container_width=True)
 
     with col2:
-        st.markdown("#### BSIT Statistics")
-        st.markdown(bsit_df.to_markdown(index=False))
-
+        st.subheader("BSIT Statistics")
+        fig = go.Figure(data=[go.Table(
+            header=dict(values=list(bsit_df.columns),
+                        fill_color='paleturquoise',
+                        align='left'),
+            cells=dict(values=[bsit_df.Metric, bsit_df.Value],
+                       fill_color='lavender',
+                       align='left'))
+        ])
+        fig.update_layout(margin=dict(l=0, r=0, t=0, b=0))
+        st.plotly_chart(fig, use_container_width=True)
 
 
 class YearOnYearComponent:
@@ -152,67 +442,138 @@ class YearOnYearComponent:
         self.display()
 
     def display(self):
-        st.subheader("Year-on-Year Dashboard")
-        st.markdown("View statistics, visualizations, and other statistics on a year-tag basis.")
+        st.title("🎓 Year-on-Year Dashboard")
+        st.markdown("Explore statistics, visualizations, and insights on a year-tag basis.")
+
         with st.spinner("Retrieving school tags..."):
             tags = get_tags()
             tags.insert(0, "")
-            value = st.selectbox(label="Select SCHOOL-TAG (School Year) to introspect", options=tags)
-            if not value:
-                return
-            global TAG_ID
-            TAG_ID = value.id
 
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            value = st.selectbox(
+                label="Select SCHOOL-TAG (School Year) to analyze",
+                options=tags,
+                format_func=lambda x: x.name if x else "Select a tag"
+            )
+        show_analysis = False
+        with col2:
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("📊 Analyze", use_container_width=True):
+                if not value:
+                    st.warning("Please select a tag to analyze.")
+                    return
+                show_analysis = True
+                global TAG_ID
+                TAG_ID = value.id
+        if show_analysis:
+            self.show_analysis()
 
+    def show_analysis(self):
 
-        sections = ["", "General Statistics", "School Summary", "Rankings", "Raw Correlation Analysis Section", "Derived Correlation Analysis Section"]
-        selected_section = st.selectbox("Select Section to View", sections)
+        sections = [
+            "General Statistics",
+            "School Summary",
+            "Rankings",
+            "Raw Correlation Analysis",
+            "Derived Correlation Analysis"
+        ]
 
-        if selected_section == "General Statistics":
-            with st.spinner("Loading general statistics..."):
-                display_stats()
+        tabs = st.tabs(sections)
 
-        elif selected_section == "School Summary":
-            col1, col2 = st.columns(2)
+        with tabs[0]:
+            self.show_general_statistics()
 
-            with col1:
-                col1.markdown("#### School Summary")
-                with st.spinner("Loading best school performance..."):
-                    best_school()
-            with col2:
-                col2.markdown("#### School Summary")
-                with st.spinner("Loading worst school performance..."):
-                    worst_school()
+        with tabs[1]:
+            self.show_school_summary()
 
-        elif selected_section == "Rankings":
-            with st.spinner("Loading rankings..."):
-                st.markdown("#### Weighted Student Rankings (C-CERT + Prog2)")
-                best_students()
+        with tabs[2]:
+            self.show_rankings()
 
-                st.divider()
+        with tabs[3]:
+            self.show_raw_correlation()
 
-                st.markdown("#### TOP 10 Best Performing Schools")
-                best_schools()
+        with tabs[4]:
+            self.show_derived_correlation()
 
-        elif selected_section == "Raw Correlation Analysis Section":
-            with st.spinner("Loading correlation analysis..."):
-                show_corr()
-                with st.expander("About Correlation"):
-                    st.markdown(
-                        "Pearson's r is a statistical measure that estimates the strength and direction of the linear relationship between two variables.\n\nHere, we analyze the correlation between 16PF variables and their performances, through their final grades and CCERT grades.",
-                        )
+    def show_general_statistics(self):
+        st.header("📈 General Statistics")
+        with st.spinner("Loading general statistics..."):
+            display_stats()
 
-                st.divider()
+    def show_school_summary(self):
+        st.header("🏫 School Summary")
+        col1, col2 = st.columns(2)
+        with col1:
+            with st.spinner("Loading best school performance..."):
+                st.subheader("Top Performing School")
+                best_school()
+        with col2:
+            with st.spinner("Loading worst school performance..."):
+                st.subheader("School Needing Improvement")
+                worst_school()
 
-                with st.spinner("Loading Correlation Analysis for Best and Worst 30 students..."):
-                    correlation_best_worst_students()
+    def show_rankings(self):
+        st.header("🏆 Rankings")
+        with st.spinner("Loading rankings..."):
+            st.subheader("Weighted Student Rankings (C-CERT + Prog2)")
+            best_students()
 
+            st.divider()
 
-        elif selected_section == "Derived Correlation Analysis Section":
+            st.subheader("TOP 10 Best Performing Schools")
+            best_schools()
 
-            with st.spinner("Showing top-and-worst analysis on 16PF..."):
-                show_common_16pf()
+    def show_raw_correlation(self):
+        st.header("🔗 Raw Correlation Analysis")
+        with st.spinner("Loading correlation analysis..."):
+            show_corr()
+            with st.expander("About Correlation"):
+                st.info(
+                    "Pearson's r measures the linear relationship between two variables. "
+                    "Here, we analyze correlations between 16PF variables and student performance "
+                    "(final grades and CCERT grades)."
+                )
 
+            st.divider()
+
+            with st.spinner("Analyzing top and bottom 30 students..."):
+                correlation_best_worst_students()
+
+    def show_derived_correlation(self):
+        st.header("🧠 Derived Correlation Analysis")
+        with st.spinner("Analyzing 16PF factors..."):
+            show_common_16pf()
+def display_stats():
+    bscs_df, bsit_df = get_stat()
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("BSCS Statistics")
+        fig = go.Figure(data=[go.Table(
+            header=dict(values=list(bscs_df.columns),
+                        fill_color='paleturquoise',
+                        align='left'),
+            cells=dict(values=[bscs_df.Metric, bscs_df.Value],
+                       fill_color='lavender',
+                       align='left'))
+        ])
+        fig.update_layout(margin=dict(l=0, r=0, t=0, b=0))
+        st.plotly_chart(fig, use_container_width=True)
+
+    with col2:
+        st.subheader("BSIT Statistics")
+        fig = go.Figure(data=[go.Table(
+            header=dict(values=list(bsit_df.columns),
+                        fill_color='paleturquoise',
+                        align='left'),
+            cells=dict(values=[bsit_df.Metric, bsit_df.Value],
+                       fill_color='lavender',
+                       align='left'))
+        ])
+        fig.update_layout(margin=dict(l=0, r=0, t=0, b=0))
+        st.plotly_chart(fig, use_container_width=True)
 
 def best_school():
     query = f"""
@@ -263,27 +624,25 @@ def best_school():
     cursor.close()
     conn.close()
 
-    # Define the columns
     columns = ["Performance", "Name", "Student Count", "Average Passing Grade", "Passing Rate (%)",
                "Average CCERT Grade (%)", "Weighted Score (%)"]
 
-    # Create a DataFrame from the fetched result
     df = pd.DataFrame([result], columns=columns)
     df['Average Passing Grade'] = df["Average Passing Grade"].apply(lambda x: (x * 5) / 100)
 
-    # Transpose the DataFrame for vertical display
     df = df.T.reset_index()
     df.columns = ["Metric", "Value"]
 
-    # Convert the DataFrame to a Markdown table
-    markdown_table = df.to_markdown(index=False)
-
-    # Display the table using Streamlit
-
-    # Normalize to 5 upon display
-
-    st.markdown(markdown_table)
-
+    fig = go.Figure(data=[go.Table(
+        header=dict(values=list(df.columns),
+                    fill_color='paleturquoise',
+                    align='left'),
+        cells=dict(values=[df.Metric, df.Value],
+                   fill_color='lavender',
+                   align='left'))
+    ])
+    fig.update_layout(margin=dict(l=0, r=0, t=0, b=0))
+    st.plotly_chart(fig, use_container_width=True)
 
 def worst_school():
     query = f"""
@@ -334,24 +693,25 @@ def worst_school():
     cursor.close()
     conn.close()
 
-    # Define the columns
     columns = ["Performance", "Name", "Student Count", "Average Passing Grade", "Passing Rate (%)",
                "Average CCERT Grade (%)", "Weighted Score (%)"]
 
-    # Create a DataFrame from the fetched result
     df = pd.DataFrame([result], columns=columns)
     df['Average Passing Grade'] = df["Average Passing Grade"].apply(lambda x: (x * 5) / 100)
 
-    # Transpose the DataFrame for vertical display
     df = df.T.reset_index()
     df.columns = ["Metric", "Value"]
 
-    # Convert the DataFrame to a Markdown table
-    markdown_table = df.to_markdown(index=False)
-
-    # Display the table using Streamlit
-    st.markdown(markdown_table)
-
+    fig = go.Figure(data=[go.Table(
+        header=dict(values=list(df.columns),
+                    fill_color='paleturquoise',
+                    align='left'),
+        cells=dict(values=[df.Metric, df.Value],
+                   fill_color='lavender',
+                   align='left'))
+    ])
+    fig.update_layout(margin=dict(l=0, r=0, t=0, b=0))
+    st.plotly_chart(fig, use_container_width=True)
 
 def show_corr():
     query = f"""
@@ -371,20 +731,20 @@ def show_corr():
     cursor.execute(query)
     result = cursor.fetchall()
 
-    # Get column names
     columns = [desc[0] for desc in cursor.description]
-
-    # Create DataFrame
     df = pd.DataFrame(result, columns=columns)
 
-    # Calculate correlations with the labels
     corr_matrix = df.corr()
 
-    # Extract correlations with `c_cert` and `grade`
+    fig_heatmap = px.imshow(corr_matrix,
+                            title='Correlation Heatmap',
+                            color_continuous_scale='RdBu_r',
+                            zmin=-1, zmax=1)
+    st.plotly_chart(fig_heatmap, use_container_width=True)
+
     corr_with_c_cert = corr_matrix['c_cert'].drop(['c_cert', 'grade']).sort_values(ascending=False, key=abs)
     corr_with_grade = corr_matrix['grade'].drop(['c_cert', 'grade']).sort_values(ascending=False, key=abs)
 
-    # Create bar graphs using Plotly
     fig_c_cert = px.bar(
         x=corr_with_c_cert.index,
         y=corr_with_c_cert.values,
@@ -401,13 +761,11 @@ def show_corr():
         text_auto=True
     )
 
-    # Display the bar graphs in Streamlit
-    st.plotly_chart(fig_c_cert)
-    st.plotly_chart(fig_grade)
+    st.plotly_chart(fig_c_cert, use_container_width=True)
+    st.plotly_chart(fig_grade, use_container_width=True)
 
     cursor.close()
     conn.close()
-
 
 def best_students():
     query = """
@@ -439,21 +797,21 @@ def best_students():
     cursor.execute(query)
     result = cursor.fetchall()
 
-    # Define the columns
     columns = ["StudentID", "Course", "School", "CCert", "Final Grade", "Weighted Score"]
-
-    # Create a DataFrame from the fetched result
     df = pd.DataFrame(result, columns=columns)
 
-    # Convert the DataFrame to a Markdown table
-    markdown_table = df.to_markdown(index=False)
-
-    # Display the table using Streamlit
-    st.markdown(markdown_table)
-
-
+    fig = go.Figure(data=[go.Table(
+        header=dict(values=list(df.columns),
+                    fill_color='paleturquoise',
+                    align='left'),
+        cells=dict(values=[df[col] for col in df.columns],
+                   fill_color='lavender',
+                   align='left'))
+    ])
+    fig.update_layout(margin=dict(l=0, r=0, t=0, b=0))
+    st.plotly_chart(fig, use_container_width=True)
 def correlation_best_worst_students():
-    query_best = f"""
+    query_template = """
     SELECT 
         attr_A, attr_B, attr_C, attr_E, attr_F, attr_G, attr_H, attr_I, attr_L, attr_M, 
         attr_N, attr_O, attr_Q1, attr_Q2, attr_Q3, attr_Q4, attr_EX, attr_AX, attr_TM, 
@@ -463,74 +821,73 @@ def correlation_best_worst_students():
     LEFT JOIN students s on s.id = assessments.student_id 
     WHERE tagID = {TAG_ID}
     ORDER BY 
-        ROUND((0.5 * (grade / 5) + 0.5 * (c_cert / 80)), 2) DESC
-    LIMIT 30
-    """
-
-    query_worst = f"""
-    SELECT 
-        attr_A, attr_B, attr_C, attr_E, attr_F, attr_G, attr_H, attr_I, attr_L, attr_M, 
-        attr_N, attr_O, attr_Q1, attr_Q2, attr_Q3, attr_Q4, attr_EX, attr_AX, attr_TM, 
-        attr_IN, attr_SC, c_cert, grade
-    FROM 
-        assessments 
-    LEFT JOIN students s on s.id = assessments.student_id 
-    WHERE tagID = {TAG_ID}
-    ORDER BY 
-        ROUND((0.5 * (grade / 5) + 0.5 * (c_cert / 80)), 2) ASC
+        ROUND((0.5 * (grade / 5) + 0.5 * (c_cert / 80)), 2) {order}
     LIMIT 30
     """
 
     conn = get_engine()
     cursor = conn.cursor()
 
-    cursor.execute(query_best)
+    # Fetch data for best and worst students
+    cursor.execute(query_template.format(TAG_ID=TAG_ID, order="DESC"))
     result_best = cursor.fetchall()
-
-    cursor.execute(query_worst)
+    cursor.execute(query_template.format(TAG_ID=TAG_ID, order="ASC"))
     result_worst = cursor.fetchall()
 
-    # Get column names
     columns = [desc[0] for desc in cursor.description]
-
-    # Create DataFrames
     df_best = pd.DataFrame(result_best, columns=columns)
     df_worst = pd.DataFrame(result_worst, columns=columns)
 
-    # Calculate correlations with the labels for best and worst students
-    corr_matrix_best = df_best.corr()
-    corr_matrix_worst = df_worst.corr()
-
-    # Extract correlations with `c_cert` and `grade`
-    corr_with_c_cert_best = corr_matrix_best['c_cert'].drop(['c_cert', 'grade']).sort_values(ascending=False, key=abs)
-    corr_with_grade_best = corr_matrix_best['grade'].drop(['c_cert', 'grade']).sort_values(ascending=False, key=abs)
-
-    corr_with_c_cert_worst = corr_matrix_worst['c_cert'].drop(['c_cert', 'grade']).sort_values(ascending=False, key=abs)
-    corr_with_grade_worst = corr_matrix_worst['grade'].drop(['c_cert', 'grade']).sort_values(ascending=False, key=abs)
-
-    # Create bar graphs using Plotly
-    fig_c_cert_best = px.bar(
-        x=corr_with_c_cert_best.index,
-        y=corr_with_c_cert_best.values,
-        title='Correlation with CCert (Best Students)',
-        labels={'x': 'Features', 'y': 'Correlation'},
-        text_auto=True
-    )
-
-    fig_grade_best = px.bar(
-        x=corr_with_grade_best.index,
-        y=corr_with_grade_best.values,
-        title='Correlation with Grade (Best Students)',
-        labels={'x': 'Features', 'y': 'Correlation'},
-        text_auto=True
-    )
-
-    # Display the bar graphs in Streamlit
-    st.plotly_chart(fig_c_cert_best)
-    st.plotly_chart(fig_grade_best)
-
     cursor.close()
     conn.close()
+
+    # Function to create correlation plots
+    def create_correlation_plot(df, title):
+        corr_matrix = df.corr()
+        corr_with_c_cert = corr_matrix['c_cert'].drop(['c_cert', 'grade']).sort_values(ascending=False, key=abs)
+        corr_with_grade = corr_matrix['grade'].drop(['c_cert', 'grade']).sort_values(ascending=False, key=abs)
+
+        fig = make_subplots(rows=1, cols=2, subplot_titles=("Correlation with CCert", "Correlation with Grade"))
+
+        fig.add_trace(
+            go.Bar(x=corr_with_c_cert.index, y=corr_with_c_cert.values, name="CCert"),
+            row=1, col=1
+        )
+        fig.add_trace(
+            go.Bar(x=corr_with_grade.index, y=corr_with_grade.values, name="Grade"),
+            row=1, col=2
+        )
+
+        fig.update_layout(
+            title_text=title,
+            height=600,
+            showlegend=False,
+            title_x=0.5
+        )
+        fig.update_traces(texttemplate='%{y:.2f}', textposition='outside')
+        fig.update_yaxes(range=[-1, 1])
+
+        return fig
+
+    st.subheader("Correlation Analysis for Top and Bottom Performers")
+
+    tab1, tab2 = st.tabs(["Top 30 Students", "Bottom 30 Students"])
+
+    with tab1:
+        fig_best = create_correlation_plot(df_best, "Correlation Analysis for Top 30 Students")
+        st.plotly_chart(fig_best, use_container_width=True)
+
+    with tab2:
+        fig_worst = create_correlation_plot(df_worst, "Correlation Analysis for Bottom 30 Students")
+        st.plotly_chart(fig_worst, use_container_width=True)
+
+    st.markdown("""
+    ### Interpretation Guide
+    - Bars represent the strength and direction of correlation between each factor and student performance (CCert and Grade).
+    - Positive values indicate a positive correlation, while negative values indicate an inverse relationship.
+    - Longer bars represent stronger correlations.
+    - Compare the patterns between top and bottom performers to identify key differences in influential factors.
+    """)
 
 
 def best_schools():
@@ -588,13 +945,35 @@ def best_schools():
     # Create a DataFrame from the fetched result
     df = pd.DataFrame(result, columns=columns)
 
+    # Apply the transformation to Average Passing Grade
     df['Average Passing Grade'] = df["Average Passing Grade"].apply(lambda x: (x * 5) / 100)
 
-    # Convert the DataFrame to a Markdown table
-    markdown_table = df.to_markdown(index=False)
+    # Round numeric columns to 2 decimal places
+    numeric_columns = ['Average Passing Grade', 'Passing Rate (%)', 'Average CCERT Grade (%)', 'Weighted Score (%)']
+    df[numeric_columns] = df[numeric_columns].round(2)
+
+    # Create the Plotly table
+    fig = go.Figure(data=[go.Table(
+        header=dict(values=list(df.columns),
+                    fill_color='paleturquoise',
+                    align='left',
+                    font=dict(color='black', size=12)),
+        cells=dict(values=[df[col] for col in df.columns],
+                   fill_color='lavender',
+                   align='left',
+                   font=dict(color='black', size=11))
+    )])
+
+    # Update the layout for better appearance
+    fig.update_layout(
+        margin=dict(l=0, r=0, t=30, b=0),
+        title_text="School Performance Overview",
+        title_x=0.5,
+        height=400  # Adjust this value based on your needs
+    )
 
     # Display the table using Streamlit
-    st.markdown(markdown_table)
+    st.plotly_chart(fig, use_container_width=True)
 
 
 def get_top_worst_students():
