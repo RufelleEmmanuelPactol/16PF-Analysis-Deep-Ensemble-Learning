@@ -1,19 +1,11 @@
-import pandas as pd
-import streamlit as st
 import tensorflow as tf
 from tensorflow.python import keras
 
-from pages_.yoy_view import get_tags
 from settings.connectivity import get_engine
-import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
-from sklearn.model_selection import KFold, train_test_split
-from tensorflow.keras.layers import Dense, InputLayer
 from tensorflow.keras.models import Sequential
 import seaborn as sns
-from tensorflow.keras.optimizers import Adam
-from imblearn.over_sampling import SMOTE
 import mysql.connector
 
 class TagHolder:
@@ -66,11 +58,30 @@ def get_engine():
 def discretize_weights(weight):
     if weight < 50:
         return 0
-    if 50 <= weight < 85:
+    if 50 <= weight < 88:
         return 1
-    if 85 <= weight <= 100:
+    if 88 <= weight <= 100:
         return 2
 
+
+def create_consistent_dummies(df, column='cfit', categories=['A', 'AA', 'BA', 'H', 'L', 'M']):
+    # Create dummy variables only for the categories present in the data
+    df = pd.get_dummies(df, columns=[column], prefix=column, prefix_sep='_')
+
+    # Ensure all specified categories are present
+    for category in categories:
+        col_name = f'{column}_{category}'
+        if col_name not in df.columns:
+            df[col_name] = 0
+
+    # Select only the specified categories and order them
+    dummy_columns = [f'{column}_{cat}' for cat in categories]
+    existing_columns = [col for col in df.columns if col not in dummy_columns]
+
+    # Reorder the dataframe
+    df = df[existing_columns + dummy_columns]
+
+    return df
 
 def fetch_data_as_dataframe(connection, query: str) -> pd.DataFrame:
     cursor = connection.cursor()
@@ -82,19 +93,14 @@ def fetch_data_as_dataframe(connection, query: str) -> pd.DataFrame:
     return df.dropna()
 
 def ModelTrainingComponent():
-    import pandas as pd
     import streamlit as st
 
     from pages_.yoy_view import get_tags
     from settings.connectivity import get_engine
     import numpy as np
     import pandas as pd
-    from sklearn.model_selection import KFold, train_test_split
     from tensorflow.keras.layers import Dense, InputLayer
     from tensorflow.keras.models import Sequential
-    from tensorflow.keras.optimizers import Adam
-    from imblearn.over_sampling import SMOTE
-    import mysql.connector
     st.header("Model Training Pipeline 🚀")
     st.markdown("This section is for retraining and training models according to loaded datasets. [V-2]")
     tags = get_tags()
@@ -115,12 +121,17 @@ def ModelTrainingComponent():
 
             df = fetch_data_as_dataframe(get_engine(), query)
         with st.spinner("Training models..."):
-            df = pd.get_dummies(df, columns=['cfit'])
+            df = create_consistent_dummies(df)
+
             df.dropna(inplace=True)
+
+            # IMPORTANT! Sort the index
+            df.sort_index(inplace=True, axis=1)
+
+
+
             final_y = df['weighted'].apply(discretize_weights)
             from sklearn.model_selection import train_test_split
-            X_train, X_test, y_train, y_test = train_test_split(df.drop(columns=['weighted']), df['weighted'],
-                                                                test_size=0.2)
 
             # success classifier
             from imblearn.over_sampling import SMOTE
@@ -165,6 +176,7 @@ def ModelTrainingComponent():
                 Dense(1, activation='sigmoid')  # Single output unit for binary classification
             ])
 
+
             # Compile the model
             model.compile(optimizer=Adam(), loss='binary_crossentropy', metrics=['accuracy'])
 
@@ -185,6 +197,7 @@ def ModelTrainingComponent():
 
             success_y = df['weighted'].apply(discretize_weights).apply(lambda x: x == 0)
             smote = SMOTE()
+
             x_f, y_f = smote.fit_resample(df.drop(columns=['weighted']), success_y)
             X_train_f, X_test_f, y_train_f, y_test_f = train_test_split(x_f, y_f, test_size=0.2)
             from keras.src.optimizers import Adam
@@ -232,15 +245,8 @@ def ModelTrainingComponent():
             success_y = df['weighted'].apply(discretize_weights).apply(lambda x: x == 1)
             smote = SMOTE()
             x_b, y_b = smote.fit_resample(df.drop(columns=['weighted']), success_y)
-            X_train_b, X_test_b, y_train_b, y_test_b = train_test_split(x_b, y_b, test_size=0.2)
             from keras.src.optimizers import Adam
             from sklearn.metrics import accuracy_score
-
-            # Convert data types
-            X_train_b = np.asarray(X_train_f).astype(np.float64)
-            y_train_b = np.asarray(y_train_f).astype(np.int16)
-            X_test_b = np.asarray(X_test_f).astype(np.float64)
-            y_test_b = np.asarray(y_test_f).astype(np.int16)
 
             # Create the model
             model = Sequential([
@@ -273,12 +279,13 @@ def ModelTrainingComponent():
             result = model.predict(final_df_features)
             df_corr = final_df[['success', 'failure']]
             df_corr['pass'] = result
+            df_corr = df_corr.sort_index(axis=1)
+
             model.save('model_pass.keras')
             st.info(f'Finished Ensemble-Member-Model 3 Accuracy (Satisfactory Predictor): {accuracy}')
 
-            merged_input_features = pd.concat([df_corr, pd.DataFrame(final_df_features)], axis=1)
+            merged_input_features = pd.concat([ pd.DataFrame(final_df_features), df_corr], axis=1)
 
-            y_one_hot = pd.get_dummies(final_y)
             from sklearn.model_selection import KFold
             from tensorflow.keras.models import Sequential
             from tensorflow.keras.layers import InputLayer, Dense
@@ -291,11 +298,14 @@ def ModelTrainingComponent():
 
             merged_input_features.columns = merged_input_features.columns.astype(str)
             merged_input_features, final_y = smote.fit_resample(merged_input_features, final_y)
-            y_one_hot = pd.get_dummies(final_y)
+            y_one_hot = pd.get_dummies(final_y, columns=['0', '1', '2'])
+
+
+
 
             # Define the model creation function
 
-            early_stopping = keras.callbacks.EarlyStopping(monitor='val_loss', patience=10)
+            early_stopping = keras.callbacks.EarlyStopping(monitor='val_loss', patience=15)
             def create_model(input_shape):
                 model = Sequential([
                     InputLayer(shape=(input_shape,)),
@@ -317,7 +327,7 @@ def ModelTrainingComponent():
                 model.compile(optimizer=Adam(), loss='categorical_crossentropy', metrics=['accuracy'],)
                 return model
 
-            n_splits = 10
+            n_splits = 5
             kfold = KFold(n_splits=n_splits, shuffle=True, random_state=42)
 
             # Perform k-fold cross-validation
@@ -383,6 +393,9 @@ def ModelTrainingComponent():
             with col2:
                 st.metric("Mean Loss", f"{np.mean(loss_per_fold):.4f}")
 
+            with open("acc.tmp", "w") as acc_file:
+                acc_file.write(f"{np.mean(acc_per_fold):.2f}%")
+
             # Visualize learning curves
             st.subheader("Learning Curves")
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
@@ -414,6 +427,7 @@ def ModelTrainingComponent():
                     final_model_progress.progress((epoch + 1) / 30)
                     final_model_status.text(f"Training epoch {epoch + 1}/30")
 
+
             final_model.fit(
                 merged_input_features,
                 y_one_hot,
@@ -425,6 +439,10 @@ def ModelTrainingComponent():
             final_model.save('model_ensemble.keras')
 
             final_model_status.text("Final model training complete!")
+
+
+
+
 
 
 

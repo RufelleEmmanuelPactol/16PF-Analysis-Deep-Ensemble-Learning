@@ -26,7 +26,7 @@ def MainComponent():
     result = st.sidebar.selectbox(options=["Home 🏠", 'About 16 Personalities 🤼‍️',
                                            "Data Loading (ETL) 📦", "Model Training 🚀",
                                            "School Dashboards📓", "Year-on-Year Dashboards 💹",
-                                           "Batch Prediction 🪄", "Analytics Report",],
+                                           "Batch Prediction 🪄",],
                                   label="Select an app to explore.")
 
     from pages_.model_training import ModelTrainingComponent

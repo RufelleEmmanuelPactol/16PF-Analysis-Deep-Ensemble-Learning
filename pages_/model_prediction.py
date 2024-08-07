@@ -7,8 +7,6 @@ import streamlit as st
 from pages_.loader_controller import retrieve_data_from_file
 
 
-
-
 def data_shaping(file_handle):
     df = pd.read_excel(file_handle, sheet_name="Student Fit Template")
 
@@ -33,170 +31,178 @@ def data_shaping(file_handle):
     df = df.drop(0)
     df = df.rename(columns={'ID Number': 'IDNumber'})
 
-
     df = format_features(df)
     return df
 
 
-def predict_underway(df: pd.DataFrame, model):
-    CFIT_map = {
-        'L': 2, 'BA': 4, 'A': 6, 'AA': 8, 'H': 10}
-
-    valid_cfit = {'L', 'BA', 'A', 'AA', 'H'}
-
-    df = df[df['CFIT'].isin(valid_cfit)]
-
-    for cfit in df['CFIT']:
-        if cfit not in valid_cfit:
-            raise Exception(
-                "Invalid CFIT input, should be within '{'L', 'BA', 'A', 'AA', 'H'}'. Got" + cfit + " instead.")
-
-    df['CFIT'] = df['CFIT'].apply(lambda x: CFIT_map[x])
-
-    input_features = ['attr_A', 'attr_B', 'attr_C', 'attr_E', 'attr_F', 'attr_G', 'attr_H', 'attr_I', 'attr_L',
-                      'attr_M',
-                      'attr_N'
-        , 'attr_O', 'attr_Q1', 'attr_Q2',
-                      'attr_Q3', 'attr_Q4', 'attr_EX', 'attr_AX', 'attr_TM', 'attr_IN', 'attr_SC', 'CFIT',]
-
-    bscs_fit = []
-    bsit_fit = []
-    with st.spinner(text='Predicting...'):
-        for index, item in df.iterrows():
-            st.write("Go")
-            input = item[input_features]
-            input_bscs = item[input_features]
-            input_bsit = item[input_features]
-            input_bscs['Course'] = 1
-            input_bsit['Course'] = 0
-            st.write(input_bscs.astype(np.float32))
-            prediction = model.predict(input_bscs.astype(np.float32))
-            st.write(prediction)
-            break
-
-
-
-
-
-
-
-
-
-
 import tensorflow.keras as keras
+
+
 def ModelPredictionComponent():
-    model = keras.models.load_model('deep-learning-model.keras')
     st.header("Model Prediction 🪄")
-    st.markdown("⚠️\t For this section, utilize the given template to generate a prediction.")
-    with open('DataTrainingTemplate.xlsx', 'rb') as file:
+    st.markdown("⚠️ For this section, utilize the given template to generate a prediction.")
+
+    # Load and display the template file
+    with open('TemplateBatchTraining.xlsx', 'rb') as file:
         file_data = file.read()
 
     with open('acc.tmp') as accuracy:
-        accuracy = float(accuracy.readline())
+        accuracy = accuracy.readline()
 
-    # Create a download button for the Excel file
     st.download_button(
         label="Download Prediction Template",
         data=file_data,
-        file_name='DataPredictionTemplate.xlsx',
+        file_name='TemplateBatchTraining.xlsx',
         mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     )
 
-    st.info(f"The model's last recorded accuracy was {round(accuracy, 2)}%. "
-            f"", icon="ℹ️")
+    st.info(f"The model's last recorded accuracy was {accuracy}.", icon="ℹ️")
 
-    file = st.file_uploader("Please load the dataset provided that it follows the template standard.", type="xlsx")
-
-
-    lower_bound = 50 - (accuracy/2)
-    upper_bound = 50 + (accuracy/2)
+    file = st.file_uploader("Please load the dataset (must follow the template standard)", type="xlsx")
 
     if file is not None:
+        attributes = [
+            'attr_A', 'attr_AX', 'attr_B', 'attr_C', 'attr_E', 'attr_EX', 'attr_F',
+            'attr_G', 'attr_H', 'attr_I', 'attr_IN', 'attr_L', 'attr_M', 'attr_N',
+            'attr_O', 'attr_Q1', 'attr_Q2', 'attr_Q3', 'attr_Q4', 'attr_SC', 'attr_TM', 'CFIT_A',
+            'CFIT_AA', 'CFIT_BA', 'CFIT_H', 'CFIT_L', 'CFIT_M'
+        ]
 
-        data = data_shaping(file)
-        predict_underway(data, model)
+        with st.spinner('Loading models...'):
+            failure_model = keras.models.load_model("model_failure.keras")
+            success_model = keras.models.load_model("model_success.keras")
+            pass_model = keras.models.load_model("model_pass.keras")
+            ensemble_model = keras.models.load_model("model_ensemble.keras")
 
-        """
-        data = retrieve_data_from_file(file)
-        bscs, bsit, _, _ = data
-        bscs['Course'] = bscs['Course'].apply(lambda x: 1)
-        bsit['Course'] = bsit['Course'].apply(lambda x: 0)
+        df = data_shaping(file)
+        validate_data(df)
 
-        CFIT_map = {
-            'L': 2, 'BA': 4, 'A': 6, 'AA': 8, 'H': 10}
+        from pages_.model_training import create_consistent_dummies
+        df = create_consistent_dummies(df, column='CFIT')
+        df.dropna(inplace=True)
 
-        valid_cfit = {'L', 'BA', 'A', 'AA', 'H'}
-        bscs = bscs[bscs['CFIT'].isin(valid_cfit)]
-        bsit = bsit[bsit['CFIT'].isin(valid_cfit)]
+        results = {
+            'IDNumber': [], "BSCS-Pass Confidence": [], "BSCS-Failure Confidence": [],
+            "BSCS-Excellence Confidence": [], "BSIT-Pass Confidence": [], "BSIT-Failure Confidence": [],
+            "BSIT-Excellence Confidence": [], "BSCS-Verdict": [], "BSIT-Verdict": []
+        }
 
-        for cfit in bscs['CFIT']:
-            if cfit not in valid_cfit:
-                raise Exception(
-                    "Invalid CFIT input, should be within '{'L', 'BA', 'A', 'AA', 'H'}'. Got" + cfit + " instead.")
+        progress_bar = st.progress(0)
+        status_text = st.empty()
 
-            for cfit in bsit['CFIT']:
-                if cfit not in valid_cfit:
-                    raise Exception(
-                        "Invalid CFIT input, should be within '{'L', 'BA', 'A', 'AA', 'H'}'. Got" + cfit + " instead.")
+        for i, (index, row) in enumerate(df.iterrows()):
+            status_text.text(f"Processing record {i + 1} of {len(df)}")
+            progress_bar.progress((i + 1) / len(df))
 
-        bscs['CFIT'] = bscs['CFIT'].apply(lambda x: CFIT_map[x])
-        bsit['CFIT'] = bsit['CFIT'].apply(lambda x: CFIT_map[x])
+            results['IDNumber'].append(row['IDNumber'])
 
-        # st.dataframe(bscs)
+            for course in ['bscs', 'bsit']:
+                input_vector = row[attributes].copy()
+                input_vector['course_bscs'] = course == 'bscs'
+                input_vector['course_bsit'] = course == 'bsit'
+                input_vector = sort_series_custom(input_vector)
 
-        input_features = ['attr_A', 'attr_B', 'attr_C', 'attr_E', 'attr_F', 'attr_G', 'attr_H', 'attr_I', 'attr_L', 'attr_M',
-             'attr_N'
-                , 'attr_O', 'attr_Q1', 'attr_Q2',
-             'attr_Q3', 'attr_Q4', 'attr_EX', 'attr_AX', 'attr_TM', 'attr_IN', 'attr_SC', 'CFIT', 'Course']
+                input_array = np.asarray(input_vector, np.float64).reshape(1, -1)
 
-        merged = pd.concat([bsit, bscs], ignore_index=True)
-        results = []
-        with st.spinner("Prediction Underway..."):
-            for index, row in merged.iterrows():
-                inputf = row[input_features]
-                result = model.predict([inputf])
-                results.append(result[0])
+                fail = failure_model.predict(input_array, verbose=0)
+                success = success_model.predict(input_array, verbose=0)
+                passing = pass_model.predict(input_array, verbose=0)
 
-            merged['prediction_weight'] = results
-            dsc = []
-            for value in merged['prediction_weight']:
-                verdict = ''
-                if value <= 20:
-                    verdict = 'Will Fail'
-                elif value < lower_bound:
-                    verdict = 'Unlikely to Pass'
-                elif lower_bound <= value <= upper_bound:
-                    verdict = 'Borderline / Unsure'
-                elif value >= 80:
-                    verdict = 'Will Excel'
-                elif value >= 70:
-                    verdict = 'High Chance to Excel'
-                else:
-                    verdict = 'Likely to Pass'
-                dsc.append(verdict)
-            merged['conclusion'] = dsc
-            merged['predicted_rank'] = merged['prediction_weight'].rank(ascending=False)
-            ideal = merged[['IDNumber', 'Previous School', 'prediction_weight', 'conclusion', 'predicted_rank']]
-            st.dataframe(ideal)
+                input_vector['fail'] = fail[0][0]
+                input_vector['pass'] = passing[0][0]
+                input_vector['success'] = success[0][0]
 
-            def to_excel(df):
-                output = BytesIO()
-                writer = pd.ExcelWriter(output, engine='xlsxwriter')
-                df.to_excel(writer, index=False, sheet_name='Sheet1')
-                writer.close()
-                processed_data = output.getvalue()
-                return processed_data
+                input_vector = sort_series_custom(input_vector)
+                input_array = np.asarray(input_vector, np.float64).reshape(1, -1)
 
-            # Convert DataFrame to Excel
-            excel_data = to_excel(ideal)
+                final_out = ensemble_model.predict(input_array, verbose=0)[0]
 
-            # Create download button
-            st.download_button(
-                label="Download as Excel",
-                data=excel_data,
-                file_name='prediction.xlsx',
-                mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-            )
-            
-            """
+                results[f'{course.upper()}-Failure Confidence'].append(f"{round(final_out[0] * 100, 2)}%")
+                results[f'{course.upper()}-Pass Confidence'].append(f"{round((final_out[1] + final_out[2]) * 100, 2)}%")
+                results[f'{course.upper()}-Excellence Confidence'].append(f"{round(final_out[2] * 100, 2)}%")
+                results[f'{course.upper()}-Verdict'].append(verdict(final_out))
 
+        status_text.text("Processing complete!")
+        progress_bar.empty()
+
+        result_df = pd.DataFrame(results)
+        st.subheader("Prediction Results")
+        st.dataframe(result_df)
+
+        # Add download button for results
+        csv = result_df.to_csv(index=False)
+        st.download_button(
+            label="Download Results as CSV",
+            data=csv,
+            file_name="prediction_results.csv",
+            mime="text/csv",
+        )
+
+
+def validate_data(df):
+    valid_cfit = ['A', 'AA', 'BA', 'H', 'L', 'M']
+    for item in df.CFIT:
+        if item in valid_cfit:
+            continue
+        else:
+            raise ValueError(f"The cfit {item} is not valid, must be in {valid_cfit}.")
+
+
+def custom_sort_key(item):
+    # Split the item into prefix and suffix
+    parts = item.split('_')
+    prefix = parts[0]
+    suffix = '_'.join(parts[1:]) if len(parts) > 1 else ''
+
+    # Define a custom order for prefixes
+    prefix_order = {'attr': 0, 'CFIT': 1, 'course': 2, 'fail': 3, 'pass': 4, 'success': 5}
+
+    # Get the order for this prefix, defaulting to a high number if not found
+    prefix_value = prefix_order.get(prefix, 100)
+
+    # Return a tuple that will be used for sorting
+    return (prefix_value, prefix.lower(), suffix.lower())
+
+
+def sort_series_custom(series):
+    sorted_index = sorted(series.index, key=custom_sort_key)
+    sorted_series = pd.Series(index=sorted_index, dtype=series.dtype)
+    for idx in sorted_index:
+        sorted_series[idx] = series[idx]
+    return sorted_series
+
+
+def verdict(triplet):
+    # Extract values for readability
+    failure, passing, success = triplet
+
+    # Define thresholds for high, medium, and low confidence
+    high_confidence_threshold = 0.6  # "High confidence" threshold
+    medium_confidence_threshold = 0.3  # "Medium confidence" threshold
+
+    # High confidence assessments
+    if failure > high_confidence_threshold:
+        return "High Confidence in Failure"
+    elif success > high_confidence_threshold:
+        return "High Confidence in Excellence"
+    elif passing > high_confidence_threshold:
+        return "High Confidence in Passing"
+
+    # Medium confidence assessments
+    if medium_confidence_threshold < failure <= high_confidence_threshold:
+        return "Medium Confidence in Failure"
+    elif medium_confidence_threshold < success <= high_confidence_threshold:
+        return "Medium Confidence in Excellence"
+    elif medium_confidence_threshold < passing <= high_confidence_threshold:
+        return "Medium Confidence in Passing"
+
+    # Low confidence assessments
+    if failure > passing and failure > success:
+        return "Low Confidence in Failure"
+    elif success > passing and success > failure:
+        return "Low Confidence in Excellence"
+    elif passing > failure and passing > success:
+        return "Low Confidence in Passing"
+
+    # Close call or no clear winner
+    return "No Clear Dominant Outcome - Close Call"
