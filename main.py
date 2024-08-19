@@ -1,8 +1,6 @@
 import streamlit as st
 
 
-
-
 def AuthComponent():
     st.header("Welcome to CCS Dashboard")
     st.markdown("To use this dashboard, please initiate the authentication process.")
@@ -26,7 +24,7 @@ def MainComponent():
     result = st.sidebar.selectbox(options=["Home 🏠", 'About 16 Personalities 🤼‍️',
                                            "Data Loading (ETL) 📦", "Model Training 🚀",
                                            "School Dashboards📓", "Year-on-Year Dashboards 💹",
-                                           "Batch Prediction 🪄",],
+                                           "Batch Prediction 🪄", "Features and Attributes"],
                                   label="Select an app to explore.")
 
     from pages_.model_training import ModelTrainingComponent
@@ -36,6 +34,7 @@ def MainComponent():
     from pages_.yoy_view import YearOnYearComponent
     from pages_.model_prediction import ModelPredictionComponent
     from pages_.school_dashboard import SchoolDashboardComponent
+    from pages_.features import FeatureComponent
 
     page_map = {
         'About 16 Personalities 🤼‍️': PersonalitiesComponent,
@@ -43,15 +42,13 @@ def MainComponent():
         "Data Loading (ETL) 📦": LoaderComponent,
         'Year-on-Year Dashboards 💹': YearOnYearComponent,
         'Model Training 🚀': ModelTrainingComponent,
-        "Batch Prediction 🪄" : ModelPredictionComponent,
-        "School Dashboards📓" : SchoolDashboardComponent
+        "Batch Prediction 🪄": ModelPredictionComponent,
+        "School Dashboards📓": SchoolDashboardComponent,
+        "Features and Attributes": FeatureComponent,
 
     }
 
-
-
     page_map.get(result)()
-
 
 
 if __name__ == "__main__":
